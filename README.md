@@ -13,9 +13,24 @@ A two-player Monopoly Deal win tracker that works offline. It is a plain static 
 ## Where your games are kept
 
 - Games and names are saved **on the device**, in the browser's storage. Nothing is sent anywhere.
-- Each device keeps its own record. They do not sync with each other.
+- Each device keeps its own record. To match two phones, use **Sync with another phone** (below).
 - Use **Back up** (bottom of the page) now and then. It saves a small `.json` file. **Restore** reads one back and adds only games the device does not already have, so restoring twice never duplicates anything.
 - Installing it to the Home Screen helps iOS keep the data. Clearing Safari's website data would remove it, so keep a backup.
+
+## Syncing two phones
+
+There is no server, so phones swap their games as a short text code.
+
+1. On the first phone, open **Sync with another phone** at the bottom and tap **Make a new code**.
+2. Tap **Share** (Messages, AirDrop, anything) or **Copy**, and send it to the other phone.
+3. On the other phone, paste it under **Add games from a code** and tap **Add games**.
+4. Do it once the other way round too, so both phones end up with the same games.
+
+Notes:
+
+- It only **adds** games the phone is missing. It never deletes or changes anything, so pasting a code twice is harmless. The flip side: a game you deleted on one phone comes back if the other phone still has it.
+- Codes are checked, so a code that got cut off or edited in transit is refused instead of half-applied. Text around the code (like "here you go!") is ignored.
+- A code is about 1,500 characters per 100 games, so it fits comfortably in one message.
 
 ## First run
 

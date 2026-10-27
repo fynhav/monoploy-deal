@@ -417,6 +417,25 @@ time { display: block; color: var(--ink-soft); font-size: 0.82rem; }
 .foot { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; color: var(--ink-soft); font-size: 0.85rem; }
 .foot p { margin: 0; max-width: 32ch; }
 .foot-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+.sync { background: var(--face); border: 2px solid var(--ink); border-radius: 14px; padding: 0 16px; }
+.sync summary {
+  display: flex; align-items: center; min-height: 56px; cursor: pointer; list-style: none;
+  font-family: var(--font-display); font-stretch: 80%; font-weight: 800; font-size: 1.3rem;
+}
+.sync summary::-webkit-details-marker { display: none; }
+.sync summary::after { content: '+'; margin-left: auto; font-size: 1.6rem; line-height: 1; }
+.sync[open] summary::after { content: '\2212'; }
+.sync-body { display: flex; flex-direction: column; gap: 20px; padding: 2px 0 18px; }
+.sync-block { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }
+.sync-block > * { max-width: 100%; }
+.sync textarea {
+  width: 100%; padding: 10px; background: var(--paper); color: var(--ink);
+  border: 1.5px solid var(--ink); border-radius: 8px; resize: vertical;
+  font: 500 16px/1.35 ui-monospace, Menlo, Consolas, monospace; overflow-wrap: anywhere;
+}
+.sync textarea:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
+.sync-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.sync-msg { margin: 0; min-height: 1.4em; font-size: 0.92rem; }
 
 @media (prefers-reduced-motion: reduce) {
   .win, .minus, .sayno, .split span { transition: none; }
@@ -527,6 +546,32 @@ time { display: block; color: var(--ink-soft); font-size: 0.82rem; }
     <ol class="rows" id="list" hidden></ol>
     <button class="ghost more" id="more" type="button" hidden>Show all games</button>
   </section>
+
+  <details class="sync" id="sync">
+    <summary>Sync with another phone</summary>
+    <div class="sync-body">
+      <p class="fine">Send your games as a text code over Messages or AirDrop. The other phone pastes it here and gets any games it is missing. Nothing is ever removed, so do it both ways to match the two phones up.</p>
+      <div class="sync-block">
+        <p class="label">Send my games</p>
+        <button class="ghost" id="syncMake" type="button">Make a code</button>
+        <div id="syncOutWrap" hidden style="width:100%">
+          <label class="sr-only" for="syncOut">Your sync code</label>
+          <textarea id="syncOut" readonly rows="3" spellcheck="false" autocapitalize="off"></textarea>
+          <div class="sync-actions" style="margin-top:10px">
+            <button class="ghost" id="syncShare" type="button" hidden>Share</button>
+            <button class="ghost" id="syncCopy" type="button">Copy</button>
+          </div>
+        </div>
+      </div>
+      <div class="sync-block">
+        <p class="label">Add games from a code</p>
+        <label class="sr-only" for="syncIn">Paste a sync code</label>
+        <textarea id="syncIn" rows="3" placeholder="Paste a code here" spellcheck="false" autocapitalize="off" autocomplete="off"></textarea>
+        <button class="ghost" id="syncAdd" type="button">Add games</button>
+        <p class="sync-msg" id="syncMsg" role="status"></p>
+      </div>
+    </div>
+  </details>
 
   <footer class="foot">
     <p id="note" role="status">Saved on this device. Works offline.</p>
@@ -658,6 +703,49 @@ time { display: block; color: var(--ink-soft); font-size: 0.82rem; }
     });
     out.sort(function (a, b) { return (Date.parse(a.at) - Date.parse(b.at)) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0); });
     return { games: out, added: added };
+  }
+  // ---- sync code: names + games as short text, safe to send in a message ----
+  function fnv(str) {
+    var h = 0x811c9dc5;
+    for (var i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
+    return ('0000000' + h.toString(36)).slice(-7);
+  }
+  function bytesToB64u(bytes) {
+    var bin = '';
+    for (var i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+    return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+  function b64uToBytes(str) {
+    var b = str.replace(/-/g, '+').replace(/_/g, '/');
+    while (b.length % 4) b += '=';
+    var bin = atob(b), out = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+    return out;
+  }
+  function encodePayload(names, games) {
+    var rows = games.map(function (g) {
+      return encodeURIComponent(g.id) + ',' + Date.parse(g.at).toString(36) + ',' + g.w;
+    }).join(';');
+    return encodeURIComponent(names[0]) + '|' + encodeURIComponent(names[1]) + '|' + rows;
+  }
+  function decodePayload(text) {
+    try {
+      var parts = String(text).split('|');
+      if (parts.length < 3) return null;
+      var names = [decodeURIComponent(parts[0]).slice(0, 18), decodeURIComponent(parts[1]).slice(0, 18)];
+      var rows = parts.slice(2).join('|'), games = [];
+      if (rows) {
+        var list = rows.split(';');
+        for (var i = 0; i < list.length; i++) {
+          var f = list[i].split(',');
+          if (f.length !== 3 || (f[2] !== '0' && f[2] !== '1')) return null;
+          var ms = parseInt(f[1], 36), id = decodeURIComponent(f[0]);
+          if (!id || id.length > 40 || !isFinite(ms)) return null;
+          games.push({ id: id, w: +f[2], at: new Date(ms).toISOString() });
+        }
+      }
+      return { names: names, games: games };
+    } catch (e) { return null; }
   }
   function colIndex(x, padL, col, n) {
     var k = Math.floor((x - padL) / col);
@@ -1081,6 +1169,50 @@ time { display: block; color: var(--ink-soft); font-size: 0.82rem; }
       .catch(function () { /* no seed file: start empty */ });
   }
 
+  // ----- Sync code -----
+  var CODE_RE = /DT([12])\.([A-Za-z0-9_-]*)\.([a-z0-9]{7})/;
+  function squeeze(bytes, how) {
+    var s = new (how === 'in' ? DecompressionStream : CompressionStream)('deflate-raw');
+    var w = s.writable.getWriter();
+    w.write(bytes).catch(function () {}); w.close().catch(function () {});
+    return new Response(s.readable).arrayBuffer().then(function (b) { return new Uint8Array(b); });
+  }
+  function makeCode() {
+    var payload = encodePayload([nm(0), nm(1)], state.games);
+    var raw = new TextEncoder().encode(payload);
+    var sum = fnv(payload);
+    var plain = 'DT1.' + bytesToB64u(raw) + '.' + sum;
+    if (typeof CompressionStream !== 'function') return Promise.resolve(plain);
+    return squeeze(raw, 'out').then(function (z) {
+      var packed = 'DT2.' + bytesToB64u(z) + '.' + sum;
+      return packed.length < plain.length ? packed : plain;
+    }, function () { return plain; });
+  }
+  function readCode(text) {
+    var m = CODE_RE.exec(String(text).replace(/\s+/g, ''));
+    if (!m) return Promise.reject(/DT[12]\./.test(String(text).replace(/\s+/g, '')) ? 'That code looks cut off. Ask for a new one.' : 'That does not look like a sync code.');
+    var bytes;
+    try { bytes = b64uToBytes(m[2]); } catch (e) { return Promise.reject('That code looks cut off. Ask for a new one.'); }
+    var done = function (raw) {
+      var payload;
+      try { payload = new TextDecoder().decode(raw); } catch (e) { payload = ''; }
+      if (fnv(payload) !== m[3]) return Promise.reject('That code looks cut off or changed. Ask for a new one.');
+      var d = decodePayload(payload);
+      return d ? d : Promise.reject('That code could not be read.');
+    };
+    if (m[1] === '1') return Promise.resolve().then(function () { return done(bytes); });
+    if (typeof DecompressionStream !== 'function') return Promise.reject('This phone is too old to read that code. Ask for a new one from the other phone.');
+    return squeeze(bytes, 'in').then(done, function () { return Promise.reject('That code looks cut off or changed. Ask for a new one.'); });
+  }
+  function syncMsg(text) { $('syncMsg').textContent = text; }
+  function copyText(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) return navigator.clipboard.writeText(text);
+    return new Promise(function (ok, no) {
+      var t = $('syncOut'); t.focus(); t.select();
+      try { document.execCommand('copy') ? ok() : no(); } catch (e) { no(e); }
+    });
+  }
+
   // ----- Back up and restore -----
   function downloadText(text, name) {
     var url = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
@@ -1250,6 +1382,36 @@ time { display: block; color: var(--ink-soft); font-size: 0.82rem; }
     }, 4000);
   });
 
+  $('syncMake').addEventListener('click', function () {
+    makeCode().then(function (code) {
+      $('syncOut').value = code;
+      $('syncOutWrap').hidden = false;
+      $('syncShare').hidden = typeof navigator.share !== 'function';
+      $('syncMake').textContent = 'Make a new code';
+    });
+  });
+  $('syncShare').addEventListener('click', function () {
+    navigator.share({ title: 'Deal Tally sync code', text: $('syncOut').value }).catch(function () { /* cancelled */ });
+  });
+  $('syncCopy').addEventListener('click', function () {
+    var btn = $('syncCopy');
+    copyText($('syncOut').value).then(function () {
+      btn.textContent = 'Copied';
+      setTimeout(function () { btn.textContent = 'Copy'; }, 1800);
+    }, function () { btn.textContent = 'Press and hold the code to copy'; });
+  });
+  $('syncAdd').addEventListener('click', function () {
+    readCode($('syncIn').value).then(function (d) {
+      var res = mergeGames(state.games, d.games);
+      state.games = res.games;
+      if (state.names[0] === DEFAULTS[0] && state.names[1] === DEFAULTS[1]) setNames(d.names);
+      saveLocal(); render();
+      $('syncIn').value = '';
+      syncMsg(res.added
+        ? 'Added ' + res.added + (res.added === 1 ? ' game' : ' games') + '. You now have ' + state.games.length + '.'
+        : 'Nothing new. This phone already has all ' + d.games.length + ' of those games.');
+    }, function (why) { syncMsg(typeof why === 'string' ? why : 'That code could not be read.'); });
+  });
   $('backup').addEventListener('click', backUp);
   $('restore').addEventListener('click', function () { $('restoreFile').click(); });
   $('restoreFile').addEventListener('change', function () {
