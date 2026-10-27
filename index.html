@@ -1,0 +1,1278 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Monopoly Deal Tally</title>
+<meta name="description" content="Two-player Monopoly Deal win tracker that works offline.">
+<meta name="theme-color" content="#2A7D50">
+<meta name="color-scheme" content="light">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Deal Tally">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<style>
+@font-face {
+  font-family: 'Bricolage Grotesque';
+  src: url('fonts/bricolage.woff') format('woff');
+  font-weight: 500 800;
+  font-stretch: 75% 100%;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Instrument Sans';
+  src: url('fonts/instrument.woff') format('woff');
+  font-weight: 400 700;
+  font-display: swap;
+}
+/* Layout: everything on the page is a card on a paper play-mat.
+   Two property-style cards side by side (colored name band, value rings in opposite corners, a rent-style stats table),
+   a gold money-style card for the series, then the game log as a stack of small landscape cards.
+   Light only on purpose: warm paper, cream card faces, ink outlines. */
+:root {
+  --paper: #EBE0C5;
+  --face: #FFFBEF;
+  --ink: #2B2218;
+  --ink-soft: #6B604C;
+  --line: #D9CCAA;
+  --blue: #1F4FA2;   /* dark blue set */
+  --red: #C42B2F;    /* red set */
+  --gold: #EDBB3E;   /* 1M money card yellow */
+  --green: #2A7D50;  /* house green */
+  --road: #DDD0AE;   /* street tan */
+  --on-band: #FFFBEF;
+  --font-display: 'Bricolage Grotesque', 'Arial Narrow', 'Helvetica Neue', system-ui, sans-serif;
+  --font-body: 'Instrument Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  color-scheme: light;
+}
+
+* { box-sizing: border-box; }
+
+/* Standalone page: keep content clear of the notch and home bar. The header band below is pulled back up under the status bar. */
+html {
+  -webkit-text-size-adjust: 100%;
+  background: var(--paper);
+  padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+}
+body { margin: 0; }
+button { touch-action: manipulation; }
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.45;
+  padding-inline: 16px;
+  padding-block: 0 56px;
+}
+
+.wrap {
+  max-width: 34rem;
+  margin-inline: auto;
+  padding-top: 26px;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+h1, h2 { font-family: var(--font-display); font-stretch: 80%; margin: 0; text-wrap: balance; }
+h1 { font-weight: 800; font-size: clamp(2rem, 8.5vw, 2.9rem); line-height: 1; letter-spacing: -0.01em; }
+h2 { font-weight: 800; font-size: 1.5rem; letter-spacing: -0.005em; }
+.sub { margin: 12px 0 0; color: var(--ink-soft); max-width: 44ch; }
+
+/* Solid header band: pulled up under the phone status bar, its content pushed back down by the same inset */
+.topbar {
+  margin-inline: -16px;
+  margin-top: calc(-1 * env(safe-area-inset-top, 0px));
+  padding: calc(26px + env(safe-area-inset-top, 0px)) 16px 20px;
+  background: var(--green);
+  color: var(--on-band);
+  border-bottom: 2px solid var(--ink);
+}
+.topbar .inner { max-width: 34rem; margin-inline: auto; }
+.topbar .sub { color: var(--on-band); }
+
+.brand { display: flex; align-items: center; gap: 14px; }
+.deck { position: relative; flex: none; width: 52px; height: 52px; }
+.deck i {
+  position: absolute; top: 6px; left: 12px;
+  width: 28px; height: 40px;
+  border: 2px solid var(--ink); border-radius: 5px;
+  background: var(--face);
+  box-shadow: inset 0 9px 0 var(--c);
+}
+.deck i:nth-child(1) { --c: var(--red);  transform: translateX(-9px) rotate(-12deg); }
+.deck i:nth-child(2) { --c: var(--gold); }
+.deck i:nth-child(3) { --c: var(--blue); transform: translateX(9px) rotate(12deg); }
+
+.sr-only {
+  position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
+button, input { font: inherit; color: inherit; }
+button:focus-visible, input:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
+
+.label {
+  margin: 0;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+/* ---- Player cards ---- */
+.deeds { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.deed { min-width: 0; display: flex; flex-direction: column; gap: 12px; }
+.deed.p0 { --c: var(--blue); }
+.deed.p1 { --c: var(--red); }
+
+.face {
+  position: relative;
+  padding: 6px 6px 54px;
+  background: var(--face);
+  border: 2px solid var(--ink);
+  border-radius: 14px;
+  box-shadow: 0 10px 14px -10px rgba(43, 34, 24, 0.45);
+}
+
+.band {
+  background: var(--c);
+  border: 1.5px solid var(--ink);
+  border-radius: 9px;
+  padding: 10px 10px 8px;
+}
+.name {
+  width: 100%;
+  min-width: 0;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px dashed rgba(255, 251, 239, 0.55);
+  border-radius: 0;
+  padding: 2px 0 4px;
+  text-align: center;
+  color: var(--on-band);
+  font-family: var(--font-display);
+  font-stretch: 80%;
+  font-weight: 800;
+  font-size: 1.2rem;
+  line-height: 1.2;
+}
+.name::placeholder { color: rgba(255, 251, 239, 0.75); }
+.name:focus-visible { outline: 2px solid var(--on-band); outline-offset: 3px; }
+
+.ring {
+  position: absolute;
+  width: 34px; height: 34px;
+  display: grid; place-items: center;
+  background: var(--face);
+  border: 2px solid var(--c);
+  border-radius: 50%;
+  color: var(--c);
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 1rem;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.ring.tight { font-size: 0.7rem; }
+.ring.tl { left: 12px; top: 70px; }
+.ring.br { right: 12px; bottom: 12px; transform: rotate(180deg); }
+
+.value { text-align: center; padding-top: 10px; }
+.count {
+  margin: 0;
+  color: var(--c);
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: clamp(3.5rem, 16vw, 5.25rem);
+  line-height: 0.95;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+
+.rent {
+  margin: 10px 6px 0;
+  display: grid;
+  border: 1.5px solid var(--ink);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.rent > div { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; padding: 5px 10px; }
+.rent > div + div { border-top: 1px solid var(--line); }
+.rent dt { font-size: 0.7rem; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase; color: var(--ink-soft); }
+.rent dd { margin: 0; color: var(--c); font-family: var(--font-display); font-weight: 800; font-size: 1.3rem; line-height: 1.2; font-variant-numeric: tabular-nums; }
+
+.actions { display: grid; grid-template-columns: 52px minmax(0, 1fr); gap: 8px; }
+.win, .minus {
+  min-height: 52px;
+  border: 2px solid var(--ink);
+  border-radius: 10px;
+  box-shadow: 0 3px 0 var(--ink);
+  font-family: var(--font-display);
+  font-weight: 800;
+  cursor: pointer;
+  transition: transform 0.08s, box-shadow 0.08s;
+}
+.win { background: var(--c); color: var(--on-band); font-size: 1.1rem; }
+.minus { background: var(--face); color: var(--ink); font-size: 1.3rem; }
+.win:active, .minus:active { transform: translateY(3px); box-shadow: 0 0 0 var(--ink); }
+.win:disabled { opacity: 0.5; cursor: default; }
+.minus:disabled { opacity: 0.35; cursor: default; }
+.win:disabled:active, .minus:disabled:active { transform: none; box-shadow: 0 3px 0 var(--ink); }
+
+/* ---- Series card ---- */
+.series {
+  background: var(--face);
+  border: 2px solid var(--ink);
+  border-radius: 14px;
+  padding: 6px;
+  box-shadow: 0 10px 14px -10px rgba(43, 34, 24, 0.45);
+}
+.sband {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap;
+  background: var(--gold);
+  border: 1.5px solid var(--ink);
+  border-radius: 9px;
+  padding: 8px 12px;
+  font-family: var(--font-display);
+  font-stretch: 80%;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.sband span:last-child { font-family: var(--font-body); font-stretch: 100%; font-weight: 600; font-size: 0.8rem; letter-spacing: 0.04em; }
+.sbody { display: flex; flex-direction: column; gap: 12px; padding: 14px 8px 10px; }
+.lead { margin: 0; font-family: var(--font-display); font-weight: 800; font-size: 1.5rem; line-height: 1.15; letter-spacing: -0.01em; }
+.split { display: flex; height: 12px; border: 1.5px solid var(--ink); border-radius: 6px; overflow: hidden; background: var(--line); }
+.split span { display: block; height: 100%; transition: width 0.3s; }
+.split .a { background: var(--blue); }
+.split .b { background: var(--red); }
+
+/* last ten games as mini cards */
+.strip { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 4px; }
+.strip li { aspect-ratio: 5 / 7; border-radius: 4px; }
+.strip .mc {
+  display: grid; grid-template-rows: 28% 1fr;
+  background: var(--face);
+  border: 1.5px solid var(--ink);
+  overflow: hidden;
+}
+.strip .mc.w0 { --c: var(--blue); }
+.strip .mc.w1 { --c: var(--red); }
+.strip .mb { background: var(--c); border-bottom: 1.5px solid var(--ink); }
+.strip .ml { display: grid; place-items: center; color: var(--c); font-family: var(--font-display); font-weight: 800; font-size: 0.8rem; line-height: 1; }
+.strip .none { border: 1.5px dashed var(--line); }
+
+/* ---- The Lead: a street with houses on the leader's side ---- */
+.sband.green { background: var(--green); color: var(--on-band); }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 0.82rem; color: var(--ink-soft); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.fine, .hint { margin: 0; font-size: 0.82rem; color: var(--ink-soft); }
+.hint { font-size: 0.78rem; }
+.street {
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  background: var(--face);
+  border: 1.5px solid var(--ink);
+  border-radius: 10px;
+}
+.street:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
+.street svg { display: block; }
+.street .hov { fill: var(--ink); fill-opacity: 0.1; }
+.street.line { touch-action: pan-y; }
+.switch {
+  display: inline-flex; align-self: flex-start; gap: 3px; padding: 3px;
+  background: var(--paper); border: 1.5px solid var(--ink); border-radius: 999px;
+}
+.switch button {
+  min-height: 40px; padding: 0 16px; border: 0; border-radius: 999px;
+  background: transparent; font-weight: 700; font-size: 0.85rem; cursor: pointer;
+}
+.switch button[aria-pressed="true"] { background: var(--gold); box-shadow: inset 0 0 0 1.5px var(--ink); }
+.switch button:focus-visible { outline-offset: 0; }
+.street .grid { stroke: var(--line); stroke-width: 1; }
+.street .gap { fill: var(--paper); fill-opacity: 0.75; }
+.street .axtick { stroke: var(--ink-soft); stroke-width: 1.5; }
+.street .ytick { font-weight: 700; font-size: 10px; fill: var(--ink-soft); }
+.street .dl { font-weight: 700; font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--face); stroke-width: 3px; stroke-linejoin: round; }
+.street .areaA { fill: var(--blue); fill-opacity: 0.3; }
+.street .areaB { fill: var(--red); fill-opacity: 0.3; }
+.street .lineP { fill: none; stroke: var(--ink); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.street .lastdot, .street .hovdot { fill: var(--ink); stroke: var(--face); stroke-width: 2; }
+.sw svg .a { fill: var(--blue); fill-opacity: 0.3; stroke: var(--blue); stroke-width: 1.5; }
+.sw svg .b { fill: var(--red); fill-opacity: 0.3; stroke: var(--red); stroke-width: 1.5; }
+.streetwrap { position: relative; }
+.tip {
+  position: absolute;
+  top: 8px;
+  z-index: 2;
+  pointer-events: none;
+  display: grid;
+  gap: 1px;
+  width: max-content;
+  max-width: calc(100% - 8px);
+  padding: 6px 10px;
+  background: var(--face);
+  border: 1.5px solid var(--ink);
+  border-radius: 8px;
+  box-shadow: 0 3px 0 var(--ink);
+  font-size: 0.8rem;
+  line-height: 1.3;
+}
+.tip[hidden] { display: none; }
+.tip b { font-family: var(--font-display); font-stretch: 80%; font-weight: 800; font-size: 0.95rem; }
+.tip .lt { font-weight: 700; }
+.tip .lt.c0 { color: var(--blue); }
+.tip .lt.c1 { color: var(--red); }
+.tip .sc { color: var(--ink-soft); font-size: 0.75rem; }
+.street text { font-family: var(--font-display); font-stretch: 80%; fill: var(--ink); }
+.street .road { fill: var(--road); }
+.street .edge { fill: none; stroke: var(--ink); stroke-width: 1.5; }
+.street .centre { stroke: var(--ink); stroke-width: 2; stroke-dasharray: 9 7; }
+.street .go { font-weight: 800; font-size: 15px; letter-spacing: 0.02em; }
+.street .tick { font-weight: 700; font-size: 10px; fill: var(--ink-soft); }
+.street .now { fill: var(--gold); fill-opacity: 0.3; }
+.street .coin { stroke: var(--ink); stroke-width: 1.5; }
+.street .coin.c0 { fill: var(--blue); }
+.street .coin.c1 { fill: var(--red); }
+.house { stroke: var(--ink); stroke-width: 1.3; stroke-linejoin: round; }
+.house.hA { fill: var(--blue); }
+.house.hB { fill: var(--red); }
+.halo { fill: var(--gold); stroke: var(--ink); stroke-width: 1.5; }
+
+/* ---- Game log ---- */
+.log-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.sayno {
+  display: grid;
+  min-height: 52px;
+  padding: 6px 14px;
+  text-align: left;
+  background: var(--face);
+  border: 2px solid var(--ink);
+  border-radius: 10px;
+  box-shadow: 0 3px 0 var(--ink);
+  cursor: pointer;
+  transition: transform 0.08s, box-shadow 0.08s;
+}
+.sayno b { font-family: var(--font-display); font-stretch: 80%; font-weight: 800; font-size: 1.05rem; line-height: 1.2; }
+.sayno span { font-size: 0.78rem; color: var(--ink-soft); }
+.sayno:active { transform: translateY(3px); box-shadow: 0 0 0 var(--ink); }
+.sayno:disabled { opacity: 0.4; cursor: default; }
+.sayno:disabled:active { transform: none; box-shadow: 0 3px 0 var(--ink); }
+
+.ghost {
+  min-height: 44px;
+  padding: 0 14px;
+  background: transparent;
+  border: 1.5px solid var(--ink);
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+.ghost:disabled { opacity: 0.4; cursor: default; }
+.more { margin-top: 12px; width: 100%; }
+
+.rows { list-style: none; margin: 14px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.row {
+  display: grid;
+  grid-template-columns: 3.6rem minmax(0, 1fr) 44px;
+  align-items: stretch;
+  background: var(--face);
+  border: 1.5px solid var(--ink);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.stub { display: grid; place-items: center; background: var(--c); color: var(--on-band); border-right: 1.5px solid var(--ink); }
+.stub.c0 { --c: var(--blue); }
+.stub.c1 { --c: var(--red); }
+.no { font-family: var(--font-display); font-weight: 800; font-size: 1.05rem; font-variant-numeric: tabular-nums; }
+.txt { min-width: 0; padding: 8px 12px; display: flex; flex-direction: column; justify-content: center; }
+.who { font-family: var(--font-display); font-stretch: 80%; font-weight: 800; font-size: 1.1rem; line-height: 1.2; overflow-wrap: anywhere; }
+time { display: block; color: var(--ink-soft); font-size: 0.82rem; }
+.rm {
+  width: 44px;
+  background: transparent; border: 0;
+  color: var(--ink-soft);
+  font-size: 1.5rem; line-height: 1;
+  cursor: pointer;
+}
+.rm:hover { color: var(--ink); }
+
+.empty-log {
+  margin: 14px 0 0;
+  padding: 18px 16px;
+  border: 1.5px dashed var(--ink-soft);
+  border-radius: 10px;
+  color: var(--ink-soft);
+  max-width: 100%;
+}
+
+.foot { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; color: var(--ink-soft); font-size: 0.85rem; }
+.foot p { margin: 0; max-width: 32ch; }
+.foot-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+
+@media (prefers-reduced-motion: reduce) {
+  .win, .minus, .sayno, .split span { transition: none; }
+}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="inner">
+    <div class="brand">
+      <span class="deck" aria-hidden="true"><i></i><i></i><i></i></span>
+      <h1>Monopoly Deal Tally</h1>
+    </div>
+    <p class="sub">First to three full sets in different colors wins the game. Tap +1 win for whoever takes it, or &minus;1 to take back their latest win.</p>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <section class="deeds" aria-label="Scoreboard">
+    <article class="deed p0">
+      <div class="face">
+        <div class="band">
+          <label class="sr-only" for="name0">Name of player 1</label>
+          <input id="name0" class="name" type="text" maxlength="18" autocomplete="off" spellcheck="false" placeholder="Player 1">
+        </div>
+        <span class="ring tl" id="rtl0" aria-hidden="true">0</span>
+        <div class="value">
+          <p class="label">Wins</p>
+          <p class="count" id="count0">0</p>
+        </div>
+        <dl class="rent">
+          <div><dt>Streak</dt><dd id="cur0">0</dd></div>
+          <div><dt>Best streak</dt><dd id="best0">0</dd></div>
+        </dl>
+        <span class="ring br" id="rbr0" aria-hidden="true">0</span>
+      </div>
+      <div class="actions">
+        <button class="minus" id="minus0" type="button">&minus;1</button>
+        <button class="win" id="win0" type="button">+1 win</button>
+      </div>
+    </article>
+
+    <article class="deed p1">
+      <div class="face">
+        <div class="band">
+          <label class="sr-only" for="name1">Name of player 2</label>
+          <input id="name1" class="name" type="text" maxlength="18" autocomplete="off" spellcheck="false" placeholder="Player 2">
+        </div>
+        <span class="ring tl" id="rtl1" aria-hidden="true">0</span>
+        <div class="value">
+          <p class="label">Wins</p>
+          <p class="count" id="count1">0</p>
+        </div>
+        <dl class="rent">
+          <div><dt>Streak</dt><dd id="cur1">0</dd></div>
+          <div><dt>Best streak</dt><dd id="best1">0</dd></div>
+        </dl>
+        <span class="ring br" id="rbr1" aria-hidden="true">0</span>
+      </div>
+      <div class="actions">
+        <button class="minus" id="minus1" type="button">&minus;1</button>
+        <button class="win" id="win1" type="button">+1 win</button>
+      </div>
+    </article>
+  </section>
+
+  <section class="series" aria-label="Series">
+    <div class="sband"><span>Series</span><span id="games">0 games played</span></div>
+    <div class="sbody">
+      <p class="lead" id="lead" aria-live="polite">No games yet</p>
+      <div class="split" id="split" role="img" aria-label="Share of wins">
+        <span class="a" id="s0"></span><span class="b" id="s1"></span>
+      </div>
+      <div>
+        <p class="label" style="margin-bottom:6px">Last 10 games, oldest to newest</p>
+        <ol class="strip" id="strip"></ol>
+      </div>
+    </div>
+  </section>
+
+  <section class="series" aria-label="Lead over time">
+    <div class="sband green"><span>The Lead</span><span id="streetNote">no games yet</span></div>
+    <div class="sbody">
+      <p class="lead" id="aheadLead" aria-live="polite">No games yet</p>
+      <div class="switch" role="group" aria-label="Chart style">
+        <button type="button" id="viewStreet" aria-pressed="true">Street</button>
+        <button type="button" id="viewLine" aria-pressed="false">Line graph</button>
+      </div>
+      <div class="legend" id="legend"></div>
+      <div class="streetwrap" id="streetWrap">
+        <div class="street" id="street" tabindex="0" role="region" aria-label="Lead after each game. Use the arrow keys to read each game."></div>
+        <div class="tip" id="tip" role="status" hidden></div>
+      </div>
+      <p class="hint" id="hint" hidden></p>
+      <p class="fine" id="streetFacts"></p>
+      <p class="fine" id="viewNote"></p>
+    </div>
+  </section>
+
+  <section aria-label="Game log">
+    <div class="log-head">
+      <h2>Game log</h2>
+      <button class="sayno" id="undo" type="button"><b>Just Say No</b><span>Undo last game</span></button>
+    </div>
+    <p class="empty-log" id="emptyLog">No games recorded yet. Each win you add shows up here with its date, newest first.</p>
+    <ol class="rows" id="list" hidden></ol>
+    <button class="ghost more" id="more" type="button" hidden>Show all games</button>
+  </section>
+
+  <footer class="foot">
+    <p id="note" role="status">Saved on this device. Works offline.</p>
+    <div class="foot-btns">
+      <button class="ghost" id="backup" type="button">Back up</button>
+      <button class="ghost" id="restore" type="button">Restore</button>
+      <button class="ghost" id="clear" type="button">Clear all games</button>
+    </div>
+    <input type="file" id="restoreFile" accept=".json,application/json" hidden>
+  </footer>
+</main>
+
+<script>
+(function () {
+  'use strict';
+  var KEY = 'dealtally.v1';
+  var SEEDED_KEY = 'dealtally.v1.seeded';
+  var DEFAULTS = ['Player 1', 'Player 2'];
+  var LOG_LIMIT = 8;
+
+  // ---- logic ----
+  function computeStats(games) {
+    var wins = [0, 0], best = [0, 0], cur = [0, 0], run = 0, who = -1;
+    games.forEach(function (g) {
+      wins[g.w]++;
+      if (g.w === who) { run++; } else { who = g.w; run = 1; }
+      if (run > best[g.w]) best[g.w] = run;
+    });
+    if (who >= 0) cur[who] = run;
+    return { wins: wins, best: best, cur: cur };
+  }
+  function leadText(wins, names) {
+    var total = wins[0] + wins[1];
+    if (!total) return 'No games yet';
+    if (wins[0] === wins[1]) return 'All square at ' + wins[0] + ' each';
+    var l = wins[0] > wins[1] ? 0 : 1;
+    return names[l] + ' leads ' + wins[l] + '–' + wins[1 - l];
+  }
+  function marks(names) {
+    var a = (names[0] || '').trim().charAt(0).toUpperCase();
+    var b = (names[1] || '').trim().charAt(0).toUpperCase();
+    if (!a || !b || a === b) return ['1', '2'];
+    return [a, b];
+  }
+  function lastWinId(games, w) {
+    for (var i = games.length - 1; i >= 0; i--) {
+      if (games[i].w === w) return games[i].id;
+    }
+    return null;
+  }
+  function leadSeries(games) {
+    var out = [], a = 0, b = 0;
+    games.forEach(function (g) {
+      if (g.w === 0) a++; else b++;
+      out.push(a - b);
+    });
+    return out;
+  }
+  function leadFacts(series) {
+    var f = { maxA: 0, atA: 0, maxB: 0, atB: 0, even: 0, current: 0 };
+    series.forEach(function (v, i) {
+      if (v > f.maxA) { f.maxA = v; f.atA = i + 1; }
+      if (-v > f.maxB) { f.maxB = -v; f.atB = i + 1; }
+      if (v === 0) f.even++;
+    });
+    if (series.length) f.current = series[series.length - 1];
+    return f;
+  }
+  function housesText(n) { return n + (n === 1 ? ' house' : ' houses'); }
+  function aheadText(current, names, n) {
+    if (!n) return 'No games yet';
+    if (current === 0) return 'All square after ' + n + (n === 1 ? ' game' : ' games');
+    return names[current > 0 ? 0 : 1] + ' is ' + housesText(Math.abs(current)) + ' ahead';
+  }
+  function factsText(f, names) {
+    var even = f.even === 0 ? 'Never back to even.'
+      : 'Back to even ' + f.even + (f.even === 1 ? ' time.' : ' times.');
+    return 'Biggest lead: ' + names[0] + ' ' + f.maxA + ', ' + names[1] + ' ' + f.maxB + '. ' + even;
+  }
+  // whole-number tick values for the line graph's side axis, always including 0
+  function yTicks(lo, hi) {
+    var span = hi - lo;
+    var step = span <= 8 ? 1 : span <= 16 ? 2 : span <= 40 ? 5 : 10;
+    var t = [], v;
+    for (v = 0; v >= lo; v -= step) t.push(v);
+    for (v = step; v <= hi; v += step) t.push(v);
+    return t.sort(function (a, b) { return b - a; });
+  }
+  function signed(v) { return v > 0 ? '+' + v : v < 0 ? '\u2212' + Math.abs(v) : '0'; }
+  function xStep(n) { return n <= 60 ? 5 : n <= 150 ? 10 : 25; }
+  // Time axis for the line graph: every day that had games gets room for its games, idle days
+  // are narrow, long quiet stretches are capped. Positions are in unscaled units from 0.
+  function localDay(iso) { var d = new Date(iso); return new Date(d.getFullYear(), d.getMonth(), d.getDate()); }
+  function dayLayout(games, perGame, minDay, idleDay, gapCap) {
+    var groups = [], cur = null;
+    games.forEach(function (g, k) {
+      var day = localDay(g.at), t = day.getTime();
+      if (!cur || cur.t !== t) { cur = { t: t, day: day, first: k, count: 0 }; groups.push(cur); }
+      cur.count++;
+    });
+    var x = 0, segs = [], gaps = [], off = [];
+    groups.forEach(function (gr, i) {
+      if (i > 0) {
+        var idle = Math.max(0, Math.round((gr.t - groups[i - 1].t) / 86400000) - 1);
+        if (idle > 0) { var gw = Math.min(idle * idleDay, gapCap); gaps.push({ x0: x, x1: x + gw, days: idle }); x += gw; }
+      }
+      var w = Math.max(minDay, gr.count * perGame);
+      segs.push({ day: gr.day, first: gr.first, count: gr.count, x0: x, x1: x + w });
+      for (var j = 0; j < gr.count; j++) off.push(x + (j + 0.5) * w / gr.count);
+      x += w;
+    });
+    return { segs: segs, gaps: gaps, off: off, width: x };
+  }
+  function nearestX(xs, px, slack) {
+    if (!xs.length || px < xs[0] - slack || px > xs[xs.length - 1] + slack) return -1;
+    var best = 0, bd = Infinity;
+    for (var i = 0; i < xs.length; i++) {
+      var d = Math.abs(xs[i] - px);
+      if (d < bd) { bd = d; best = i; }
+    }
+    return best;
+  }
+  // Combine games already on this device with games from a backup or seed file, matched by id.
+  function mergeGames(have, incoming) {
+    var seen = {}, out = [], added = 0;
+    have.forEach(function (g) { seen[g.id] = true; out.push(g); });
+    incoming.forEach(function (g) {
+      if (!seen[g.id]) { seen[g.id] = true; out.push(g); added++; }
+    });
+    out.sort(function (a, b) { return (Date.parse(a.at) - Date.parse(b.at)) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0); });
+    return { games: out, added: added };
+  }
+  function colIndex(x, padL, col, n) {
+    var k = Math.floor((x - padL) / col);
+    return k >= 0 && k < n ? k : -1;
+  }
+  function tipInfo(games, k, names) {
+    var st = computeStats(games.slice(0, k + 1));
+    var lead = st.wins[0] - st.wins[1];
+    return {
+      num: k + 1,
+      winner: names[games[k].w],
+      side: lead === 0 ? -1 : (lead > 0 ? 0 : 1),
+      leadText: lead === 0 ? 'All square' : names[lead > 0 ? 0 : 1] + ' +' + Math.abs(lead),
+      score: st.wins[0] + '–' + st.wins[1]
+    };
+  }
+  function cleanGames(list) {
+    if (!Array.isArray(list)) return [];
+    return list.filter(function (g) {
+      return g && (g.w === 0 || g.w === 1) && typeof g.id === 'string' && !isNaN(Date.parse(g.at));
+    });
+  }
+  // ---- end logic ----
+
+  var state = { names: DEFAULTS.slice(), games: [] };
+  var mode = 'local';
+  var storageOk = true;
+  var noteTimer = null;
+  var showAll = false;
+
+  function $(id) { return document.getElementById(id); }
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+  function nm(i) { return (state.names[i] || '').trim() || DEFAULTS[i]; }
+  function newId() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+
+  // Browser storage: a fast first paint and the fallback when page storage is unavailable
+  function probe() {
+    try {
+      localStorage.setItem(KEY + '.probe', '1');
+      localStorage.removeItem(KEY + '.probe');
+      storageOk = true;
+    } catch (e) { storageOk = false; }
+  }
+  function loadLocal() {
+    try {
+      var raw = localStorage.getItem(KEY);
+      if (!raw) return;
+      var d = JSON.parse(raw);
+      if (d && Array.isArray(d.names)) {
+        state.names = [0, 1].map(function (i) {
+          return typeof d.names[i] === 'string' ? d.names[i].slice(0, 18) : DEFAULTS[i];
+        });
+      }
+      state.games = cleanGames(d && d.games);
+    } catch (e) { /* start fresh */ }
+  }
+  function saveLocal() {
+    try { localStorage.setItem(KEY, JSON.stringify(state)); storageOk = true; }
+    catch (e) { storageOk = false; }
+  }
+
+  function fmtDate(d) {
+    try {
+      var o = { weekday: 'short', day: 'numeric', month: 'short' };
+      if (d.getFullYear() !== new Date().getFullYear()) o.year = 'numeric';
+      return d.toLocaleDateString(undefined, o) + ' · ' +
+        d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+    } catch (e) { return d.toISOString().slice(0, 16).replace('T', ' '); }
+  }
+
+  function renderNote() {
+    $('note').textContent = storageOk
+      ? 'Saved on this device. Works offline.'
+      : 'This browser is blocking storage, so games will be lost when you close the app.';
+  }
+  function flashNote(text) {
+    $('note').textContent = text;
+    clearTimeout(noteTimer);
+    noteTimer = setTimeout(renderNote, 6000);
+  }
+  function fail() {
+    flashNote('That change could not be saved. This device’s storage may be full.');
+  }
+
+  function render() {
+    var st = computeStats(state.games);
+    var names = [nm(0), nm(1)];
+    var mk = marks(names);
+    var total = st.wins[0] + st.wins[1];
+    var n = state.games.length;
+
+    [0, 1].forEach(function (i) {
+      var w = st.wins[i];
+      $('count' + i).textContent = w;
+      ['rtl', 'rbr'].forEach(function (p) {
+        var el = $(p + i);
+        el.textContent = w;
+        el.classList.toggle('tight', String(w).length > 2);
+      });
+      $('cur' + i).textContent = st.cur[i];
+      $('best' + i).textContent = st.best[i];
+      $('win' + i).setAttribute('aria-label', 'Add a win for ' + names[i]);
+      $('win' + i).disabled = mode === 'pending';
+      $('minus' + i).setAttribute('aria-label', 'Take back the latest win for ' + names[i]);
+      $('minus' + i).disabled = mode === 'pending' || w === 0;
+    });
+
+    $('lead').textContent = leadText(st.wins, names);
+    $('games').textContent = n === 1 ? '1 game played' : n + ' games played';
+    $('s0').style.width = total ? (st.wins[0] / total * 100) + '%' : '0';
+    $('s1').style.width = total ? (st.wins[1] / total * 100) + '%' : '0';
+    $('split').setAttribute('aria-label',
+      names[0] + ' ' + st.wins[0] + ' wins, ' + names[1] + ' ' + st.wins[1] + ' wins');
+
+    var last = state.games.slice(-10);
+    var s = '';
+    for (var k = 0; k < 10; k++) {
+      var g = last[k];
+      if (g) {
+        s += '<li class="mc w' + g.w + '" aria-label="Game ' + (n - last.length + k + 1) +
+          ' won by ' + esc(names[g.w]) + '"><span class="mb"></span><span class="ml">' + esc(mk[g.w]) + '</span></li>';
+      } else {
+        s += '<li class="none" aria-hidden="true"></li>';
+      }
+    }
+    $('strip').innerHTML = s;
+    renderStreet(names);
+
+    var from = showAll ? 0 : Math.max(0, n - LOG_LIMIT);
+    var rows = '';
+    for (var i = n - 1; i >= from; i--) {
+      var gm = state.games[i];
+      rows += '<li class="row"><span class="stub c' + gm.w + '"><span class="no">#' + (i + 1) + '</span></span>' +
+        '<div class="txt"><span class="who">' + esc(names[gm.w]) + '</span>' +
+        '<time datetime="' + esc(gm.at) + '">' + esc(fmtDate(new Date(gm.at))) + '</time></div>' +
+        '<button type="button" class="rm" data-id="' + esc(gm.id) + '" aria-label="Remove game ' + (i + 1) + '">&times;</button></li>';
+    }
+    $('list').innerHTML = rows;
+    $('list').hidden = n === 0;
+    $('emptyLog').hidden = n !== 0;
+    $('more').hidden = n <= LOG_LIMIT;
+    $('more').textContent = showAll ? 'Show latest ' + LOG_LIMIT + ' only' : 'Show all ' + n + ' games';
+    $('undo').disabled = n === 0 || mode === 'pending';
+    $('clear').disabled = n === 0 || mode === 'pending';
+  }
+
+  // ----- The Lead street -----
+  var streetFirst = true, curK = -1, pinK = -1;
+  var ST_COL = 18, ST_PADL = 52;
+  var chartView = 'street', atEndPending = false;
+  try { if (localStorage.getItem('dealtally.view') === 'line') chartView = 'line'; } catch (e) {}
+  // geometry of whichever chart is showing, used by the hover card and pointer maths
+  function streetGeo() {
+    return {
+      x: function (k) { return ST_PADL + k * ST_COL + ST_COL / 2; },
+      idx: function (px) { return colIndex(px, ST_PADL, ST_COL, state.games.length); },
+      hw: ST_COL, ys: null, mid: 0
+    };
+  }
+  var geo = streetGeo();
+  function housePath(x, y, cls, flip) {
+    var d = flip
+      ? 'M' + x + ' ' + y + 'H' + (x + 14) + 'V' + (y + 7) + 'L' + (x + 7) + ' ' + (y + 13) + 'L' + x + ' ' + (y + 7) + 'Z'
+      : 'M' + x + ' ' + (y + 6) + 'L' + (x + 7) + ' ' + y + 'L' + (x + 14) + ' ' + (y + 6) + 'V' + (y + 13) + 'H' + x + 'Z';
+    return '<path class="house ' + cls + '" d="' + d + '"/>';
+  }
+  function renderStreet(names) {
+    var n = state.games.length;
+    var series = leadSeries(state.games);
+    var f = leadFacts(series);
+    var box = $('street');
+    var atEnd = box.scrollLeft + box.clientWidth >= box.scrollWidth - 8;
+
+    var head = aheadText(f.current, names, n);
+    $('aheadLead').textContent = head;
+    $('streetNote').textContent = n ? 'after ' + n + (n === 1 ? ' game' : ' games') : 'no games yet';
+    $('streetFacts').textContent = n
+      ? factsText(f, names)
+      : 'Each win adds a house for whoever is ahead.';
+    var line = chartView === 'line';
+    $('viewStreet').setAttribute('aria-pressed', String(!line));
+    $('viewLine').setAttribute('aria-pressed', String(line));
+    box.classList.toggle('line', line);
+    $('viewNote').textContent = line
+      ? 'The line is the lead after each game, laid out by date. Each day you played gets room for its games; shaded stretches are days with no games. Above the dashed line ' + names[0] + ' is ahead; below it ' + names[1] + ' is.'
+      : 'Each house is one win of lead. Coins on the road show who won each game. The dashed centre line is all square.';
+    var sw = function (c) {
+      return '<span class="sw"><svg width="16" height="14" viewBox="0 0 16 14" aria-hidden="true"><rect class="' + c + '" x="1" y="1" width="14" height="12" rx="2"/></svg>';
+    };
+    $('legend').innerHTML = line
+      ? sw('a') + esc(names[0]) + ' ahead</span>' + sw('b') + esc(names[1]) + ' ahead</span>' +
+        '<span><svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><circle class="halo" cx="9" cy="9" r="6.5"/></svg>All square</span>'
+      : '<span><svg width="16" height="15" viewBox="-1 -1 16 15" aria-hidden="true">' + housePath(0, 0, 'hA', false) + '</svg>' + esc(names[0]) + ' ahead</span>' +
+        '<span><svg width="16" height="15" viewBox="-1 -1 16 15" aria-hidden="true">' + housePath(0, 0, 'hB', true) + '</svg>' + esc(names[1]) + ' ahead</span>' +
+        '<span><svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><circle class="halo" cx="9" cy="9" r="7.5"/></svg>All square</span>';
+
+    if (line) {
+      drawLine(names, series, f, head, box);
+      if (pinK >= n) pinK = -1;
+      showTip(curK >= 0 && curK < n ? curK : pinK);
+      return;
+    }
+    if (atEndPending) { streetFirst = true; atEndPending = false; }
+    geo = streetGeo();
+
+    var UNIT = 15, COL = ST_COL, PADL = ST_PADL, PADR = 18, ROAD = 28, AXIS = 20;
+    var topH = Math.max(1, f.maxA) * UNIT + 8;
+    var botH = Math.max(1, f.maxB) * UNIT + 8;
+    var H = topH + ROAD + botH + AXIS;
+    var natural = PADL + n * COL + PADR;
+    var W = Math.max(natural, box.clientWidth || 340);
+    var yc = topH + ROAD / 2;
+
+    var s = '<rect class="road" x="0" y="' + topH + '" width="' + W + '" height="' + ROAD + '"/>' +
+      '<path class="edge" d="M0 ' + topH + 'H' + W + 'M0 ' + (topH + ROAD) + 'H' + W + '"/>' +
+      '<line class="centre" x1="' + PADL + '" y1="' + yc + '" x2="' + (W - 10) + '" y2="' + yc + '"/>' +
+      '<text class="go" x="' + (PADL / 2) + '" y="' + (yc + 5) + '" text-anchor="middle">GO</text>';
+    if (n) {
+      s += '<rect class="now" x="' + (PADL + (n - 1) * COL) + '" y="0" width="' + COL + '" height="' + (H - AXIS) + '"/>';
+    }
+    s += '<rect id="hov" class="hov" x="0" y="0" width="' + COL + '" height="' + (H - AXIS) + '" display="none"/>';
+    var houses = '', coins = '', ticks = '';
+    series.forEach(function (v, k) {
+      var cx = PADL + k * COL + COL / 2;
+      for (var i = 0; i < Math.abs(v); i++) {
+        houses += v > 0
+          ? housePath(cx - 7, topH - (i + 1) * UNIT, 'hA', false)
+          : housePath(cx - 7, topH + ROAD + 2 + i * UNIT, 'hB', true);
+      }
+      if (v === 0) coins += '<circle class="halo" cx="' + cx + '" cy="' + yc + '" r="9.5"/>';
+      coins += '<circle class="coin c' + state.games[k].w + '" cx="' + cx + '" cy="' + yc + '" r="6"/>';
+      var num = k + 1;
+      if (num === 1 || num % 5 === 0 || (k === n - 1 && num % 5 >= 2)) {
+        ticks += '<text class="tick" x="' + cx + '" y="' + (H - 6) + '" text-anchor="middle">' + num + '</text>';
+      }
+    });
+
+    box.innerHTML = '<svg width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H +
+      '" role="img" aria-label="' + esc(head) + '. One house for each win of lead, after every game.">' +
+      s + houses + coins + ticks + '</svg>';
+    $('hint').hidden = !n;
+    $('hint').textContent = (natural > box.clientWidth + 1 ? 'Swipe sideways for earlier games. ' : '') +
+      'Tap or hover a game to see the lead.';
+    if (streetFirst || atEnd) box.scrollLeft = box.scrollWidth;
+    streetFirst = false;
+    if (pinK >= n) pinK = -1;
+    showTip(curK >= 0 && curK < n ? curK : pinK);
+  }
+
+  function drawLine(names, series, f, head, box) {
+    var n = series.length;
+    var W = Math.max(240, box.clientWidth || 340), H = 210;
+    var PADL = 40, PADR = 14, PADT = 14, PADB = 26;
+    var lo = -Math.max(2, f.maxB), hi = Math.max(2, f.maxA);
+    var plotW = W - PADL - PADR, plotH = H - PADT - PADB;
+    function Y(v) { return PADT + (hi - v) / (hi - lo) * plotH; }
+    var yz = Y(0), s = '';
+    var lay = dayLayout(state.games, 8, 30, 8, 56);
+    var S = lay.width ? plotW / lay.width : 1;
+    function X(u) { return PADL + u * S; }
+    var xs = lay.off.map(X), ys = series.map(Y);
+
+    // shaded stretches with no games
+    lay.gaps.forEach(function (g) {
+      s += '<rect class="gap" x="' + X(g.x0).toFixed(1) + '" y="' + PADT + '" width="' + ((g.x1 - g.x0) * S).toFixed(1) + '" height="' + plotH + '"/>';
+    });
+    yTicks(lo, hi).forEach(function (t) {
+      var y = Y(t);
+      if (t !== 0) s += '<line class="grid" x1="' + PADL + '" x2="' + (W - PADR) + '" y1="' + y + '" y2="' + y + '"/>';
+      s += '<text class="ytick" x="' + (PADL - 8) + '" y="' + (y + 3.5) + '" text-anchor="end">' + signed(t) + '</text>';
+    });
+    s += '<line class="centre" x1="' + PADL + '" y1="' + yz + '" x2="' + (W - PADR) + '" y2="' + yz + '"/>';
+    s += '<rect id="hov" class="hov" x="0" y="' + PADT + '" width="4" height="' + plotH + '" display="none"/>';
+
+    // the lead holds steady through quiet days, then moves with the next game
+    var d = 'M' + PADL + ' ' + yz.toFixed(1), prevSeg = -1, segOf = [];
+    lay.segs.forEach(function (sg, i) { for (var j = 0; j < sg.count; j++) segOf.push(i); });
+    series.forEach(function (v, k) {
+      if (k > 0 && segOf[k] !== segOf[k - 1]) d += 'L' + X(lay.segs[segOf[k]].x0).toFixed(1) + ' ' + ys[k - 1].toFixed(1);
+      d += 'L' + xs[k].toFixed(1) + ' ' + ys[k].toFixed(1);
+    });
+    var lastX = n ? xs[n - 1] : PADL;
+    var area = d + 'L' + lastX.toFixed(1) + ' ' + yz.toFixed(1) + 'Z';
+    s += '<clipPath id="clipA"><rect x="0" y="0" width="' + W + '" height="' + yz + '"/></clipPath>' +
+         '<clipPath id="clipB"><rect x="0" y="' + yz + '" width="' + W + '" height="' + (H - yz) + '"/></clipPath>';
+    if (n) {
+      s += '<path class="areaA" clip-path="url(#clipA)" d="' + area + '"/>' +
+           '<path class="areaB" clip-path="url(#clipB)" d="' + area + '"/>' +
+           '<path class="lineP" d="' + d + '"/>';
+      series.forEach(function (v, k) {
+        if (v === 0) s += '<circle class="halo" cx="' + xs[k].toFixed(1) + '" cy="' + yz.toFixed(1) + '" r="5"/>';
+      });
+      s += '<circle class="lastdot" cx="' + lastX.toFixed(1) + '" cy="' + ys[n - 1].toFixed(1) + '" r="4.5"/>';
+    }
+    s += '<circle id="hovdot" class="hovdot" r="5" cx="0" cy="0" display="none"/>';
+    s += '<rect x="' + (PADL + 6) + '" y="' + (PADT + 3) + '" width="9" height="9" rx="2" class="areaA" style="fill-opacity:1"/>' +
+         '<text class="dl" x="' + (PADL + 20) + '" y="' + (PADT + 11.5) + '">' + esc(names[0]) + ' ahead</text>' +
+         '<rect x="' + (PADL + 6) + '" y="' + (H - PADB - 12) + '" width="9" height="9" rx="2" class="areaB" style="fill-opacity:1"/>' +
+         '<text class="dl" x="' + (PADL + 20) + '" y="' + (H - PADB - 4.5) + '">' + esc(names[1]) + ' ahead</text>';
+
+    // one date label per day played, skipping any that would run into the previous one
+    var ticks = '', edge = -1e9;
+    lay.segs.forEach(function (sg) {
+      var cx = (X(sg.x0) + X(sg.x1)) / 2;
+      var label = fmtDay(sg.day);
+      var half = label.length * 2.9 + 3;
+      ticks += '<line class="axtick" x1="' + cx.toFixed(1) + '" x2="' + cx.toFixed(1) + '" y1="' + (H - PADB) + '" y2="' + (H - PADB + 4) + '"/>';
+      if (cx - half > edge) {
+        ticks += '<text class="tick" x="' + cx.toFixed(1) + '" y="' + (H - 7) + '" text-anchor="middle">' + esc(label) + '</text>';
+        edge = cx + half + 4;
+      }
+    });
+
+    box.innerHTML = '<svg width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H +
+      '" role="img" aria-label="' + esc(head) + '. Line graph of the lead after every game, by date.">' + s + ticks + '</svg>';
+    $('hint').hidden = !n;
+    $('hint').textContent = 'Tap, drag or hover the graph to see the lead at each game.';
+    box.scrollLeft = 0;
+    atEndPending = true;
+    geo = {
+      x: function (k) { return xs[k]; },
+      idx: function (px) { return nearestX(xs, px, 6); },
+      hw: 4, ys: ys, mid: yz
+    };
+  }
+
+  function fmtDay(d) {
+    try { return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' }); }
+    catch (e) { return d.getDate() + '/' + (d.getMonth() + 1); }
+  }
+  function fmtShort(d) {
+    try { return d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' }); }
+    catch (e) { return d.toISOString().slice(0, 10); }
+  }
+  function tipHtml(k) {
+    var t = tipInfo(state.games, k, [nm(0), nm(1)]);
+    return '<span><b>Game ' + t.num + '</b> · ' + esc(t.winner) + ' won</span>' +
+      '<span class="lt' + (t.side < 0 ? '' : ' c' + t.side) + '">' + (t.side < 0 ? '' : 'Lead: ') + esc(t.leadText) + '</span>' +
+      '<span class="sc">Score ' + t.score + ' · ' + esc(fmtShort(new Date(state.games[k].at))) + '</span>';
+  }
+  function showTip(k) {
+    var tip = $('tip'), hov = $('hov'), n = state.games.length;
+    if (k < 0 || k >= n) {
+      curK = -1;
+      tip.hidden = true;
+      if (hov) hov.setAttribute('display', 'none');
+      if ($('hovdot')) $('hovdot').setAttribute('display', 'none');
+      return;
+    }
+    curK = k;
+    tip.innerHTML = tipHtml(k);
+    tip.hidden = false;
+    var wrapW = $('streetWrap').clientWidth;
+    var px = geo.x(k);
+    var cx = 1.5 + px - $('street').scrollLeft;
+    var w = tip.offsetWidth;
+    // sit beside the column, not on top of it, so the chart stays visible
+    var left = cx + geo.hw / 2 + 8;
+    if (left + w > wrapW - 4) left = cx - geo.hw / 2 - 8 - w;
+    tip.style.left = Math.max(4, left) + 'px';
+    // on the line graph, keep the card away from the point it describes
+    var top = 8;
+    if (geo.ys && geo.ys[k] < geo.mid) top = Math.max(8, $('street').offsetHeight - tip.offsetHeight - 30);
+    tip.style.top = top + 'px';
+    if (hov) {
+      hov.setAttribute('width', geo.hw);
+      hov.setAttribute('x', px - geo.hw / 2);
+      hov.setAttribute('display', 'inline');
+    }
+    var dot = $('hovdot');
+    if (dot && geo.ys) {
+      dot.setAttribute('cx', px);
+      dot.setAttribute('cy', geo.ys[k]);
+      dot.setAttribute('display', 'inline');
+    }
+  }
+
+  // ----- Changes: saved on this device -----
+  function addWin(w) {
+    state.games.push({ id: newId(), w: w, at: new Date().toISOString() });
+    saveLocal(); render();
+  }
+  function removeGame(id) {
+    state.games = state.games.filter(function (g) { return g.id !== id; });
+    saveLocal(); render();
+  }
+  function clearAll() {
+    state.games = [];
+    saveLocal(); render();
+  }
+
+  // ----- First run: bring in the games from the old shared page, once -----
+  function setNames(list) {
+    [0, 1].forEach(function (i) {
+      if (list && typeof list[i] === 'string') {
+        state.names[i] = list[i].slice(0, 18);
+        $('name' + i).value = state.names[i];
+      }
+    });
+  }
+  function loadSeed() {
+    var skip = false;
+    try { skip = localStorage.getItem(SEEDED_KEY) === '1' || localStorage.getItem(KEY) !== null; }
+    catch (e) { return; }
+    if (skip || !window.fetch) return;
+    fetch('seed.json', { cache: 'no-cache' })
+      .then(function (r) { if (!r.ok) throw new Error('no seed'); return r.json(); })
+      .then(function (d) {
+        var games = cleanGames(d && d.games);
+        if (!games.length || state.games.length) return;
+        state.games = mergeGames([], games).games;
+        if (state.names[0] === DEFAULTS[0] && state.names[1] === DEFAULTS[1]) setNames(d.names);
+        saveLocal(); render();
+        try { localStorage.setItem(SEEDED_KEY, '1'); } catch (e) { /* ignore */ }
+        flashNote('Loaded your ' + games.length + ' saved games.');
+      })
+      .catch(function () { /* no seed file: start empty */ });
+  }
+
+  // ----- Back up and restore -----
+  function downloadText(text, name) {
+    var url = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
+    var a = document.createElement('a');
+    a.href = url; a.download = name;
+    document.body.appendChild(a); a.click();
+    setTimeout(function () { URL.revokeObjectURL(url); a.remove(); }, 1500);
+  }
+  function backUp() {
+    var text = JSON.stringify({
+      app: 'monopoly-deal-tally', version: 1, exportedAt: new Date().toISOString(),
+      names: [nm(0), nm(1)], games: state.games
+    }, null, 1);
+    var name = 'deal-tally-backup-' + new Date().toISOString().slice(0, 10) + '.json';
+    try {
+      var file = new File([text], name, { type: 'application/json' });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        navigator.share({ files: [file], title: 'Deal Tally backup' }).then(function () {
+          flashNote('Backup shared.');
+        }, function (e) {
+          if (!e || e.name !== 'AbortError') downloadText(text, name);
+        });
+        return;
+      }
+    } catch (e) { /* fall back to a download */ }
+    downloadText(text, name);
+    flashNote('Backup saved to your downloads.');
+  }
+  function restoreFrom(text) {
+    var d;
+    try { d = JSON.parse(text); } catch (e) { d = null; }
+    var incoming = d && cleanGames(d.games);
+    if (!incoming || (!incoming.length && !(d.games && d.games.length === 0))) {
+      flashNote('That file is not a Deal Tally backup.');
+      return;
+    }
+    var res = mergeGames(state.games, incoming);
+    state.games = res.games;
+    setNames(d.names);
+    saveLocal(); render();
+    flashNote('Restored ' + incoming.length + ' games (' + res.added + ' new).');
+  }
+
+  // ----- Wire up -----
+  probe();
+  loadLocal();
+  [0, 1].forEach(function (i) {
+    var input = $('name' + i);
+    input.value = state.names[i];
+    input.addEventListener('input', function () {
+      state.names[i] = input.value;
+      saveLocal();
+      render();
+    });
+    $('win' + i).addEventListener('click', function () { addWin(i); });
+    $('minus' + i).addEventListener('click', function () {
+      var id = lastWinId(state.games, i);
+      if (id) removeGame(id);
+    });
+  });
+
+  $('undo').addEventListener('click', function () {
+    var n = state.games.length;
+    if (n) removeGame(state.games[n - 1].id);
+  });
+
+  $('list').addEventListener('click', function (e) {
+    var btn = e.target.closest ? e.target.closest('.rm') : null;
+    if (btn) removeGame(btn.getAttribute('data-id'));
+  });
+
+  $('more').addEventListener('click', function () {
+    showAll = !showAll;
+    render();
+  });
+
+  // Hover (mouse), tap (touch) and arrow keys on the street
+  var sBox = $('street');
+  function streetX(e) {
+    var svg = sBox.firstElementChild;
+    return svg ? e.clientX - svg.getBoundingClientRect().left : -1;
+  }
+  function colAt(e) { return geo.idx(streetX(e)); }
+  var scrub = null, swallowClick = false;
+  sBox.addEventListener('pointerdown', function (e) {
+    if (chartView !== 'line' || e.pointerType === 'mouse') return;
+    var k = colAt(e);
+    scrub = { prev: pinK, k: k, moved: false };
+    if (k >= 0) { pinK = k; showTip(k); }
+  });
+  sBox.addEventListener('pointermove', function (e) {
+    var k = colAt(e);
+    if (e.pointerType === 'mouse') { showTip(k); return; }
+    if (scrub && k >= 0) {
+      if (k !== scrub.k) scrub.moved = true;
+      pinK = k; showTip(k);
+    }
+  });
+  sBox.addEventListener('pointerup', function () {
+    if (!scrub) return;
+    // a tap on the card that is already pinned closes it
+    if (!scrub.moved && scrub.k === scrub.prev) { pinK = -1; showTip(-1); }
+    scrub = null;
+    swallowClick = true;
+    setTimeout(function () { swallowClick = false; }, 400);
+  });
+  sBox.addEventListener('pointercancel', function () {
+    if (!scrub) return;
+    pinK = scrub.prev; showTip(pinK); scrub = null;
+  });
+  sBox.addEventListener('pointerleave', function (e) {
+    if (e.pointerType === 'mouse') showTip(pinK);
+  });
+  sBox.addEventListener('click', function (e) {
+    if (swallowClick) { swallowClick = false; return; }
+    var k = colAt(e);
+    pinK = k === pinK ? -1 : k;
+    showTip(pinK);
+  });
+  document.addEventListener('click', function (e) {
+    if (pinK !== -1 && !$('streetWrap').contains(e.target)) { pinK = -1; showTip(-1); }
+  });
+  sBox.addEventListener('scroll', function () { if (curK >= 0) showTip(curK); });
+  sBox.addEventListener('keydown', function (e) {
+    var n = state.games.length, k = pinK;
+    if (!n) return;
+    if (e.key === 'ArrowLeft') k = k < 0 ? n - 1 : Math.max(0, k - 1);
+    else if (e.key === 'ArrowRight') k = k < 0 ? n - 1 : Math.min(n - 1, k + 1);
+    else if (e.key === 'Home') k = 0;
+    else if (e.key === 'End') k = n - 1;
+    else if (e.key === 'Escape') { pinK = -1; showTip(-1); return; }
+    else return;
+    e.preventDefault();
+    pinK = k;
+    var px = geo.x(k);
+    if (px - 12 < sBox.scrollLeft) sBox.scrollLeft = Math.max(0, px - 12);
+    else if (px + 12 > sBox.scrollLeft + sBox.clientWidth) sBox.scrollLeft = px + 12 - sBox.clientWidth;
+    showTip(k);
+  });
+
+  function setView(v) {
+    if (v === chartView) return;
+    chartView = v;
+    try { localStorage.setItem('dealtally.view', v); } catch (e) {}
+    streetFirst = true;
+    renderStreet([nm(0), nm(1)]);
+  }
+  $('viewStreet').addEventListener('click', function () { setView('street'); });
+  $('viewLine').addEventListener('click', function () { setView('line'); });
+
+  window.addEventListener('resize', function () { render(); });
+
+  var clearTimer = null;
+  var clearBtn = $('clear');
+  clearBtn.addEventListener('click', function () {
+    if (clearTimer) {
+      clearTimeout(clearTimer);
+      clearTimer = null;
+      clearBtn.textContent = 'Clear all games';
+      clearAll();
+      return;
+    }
+    clearBtn.textContent = 'Tap again to clear';
+    clearTimer = setTimeout(function () {
+      clearTimer = null;
+      clearBtn.textContent = 'Clear all games';
+    }, 4000);
+  });
+
+  $('backup').addEventListener('click', backUp);
+  $('restore').addEventListener('click', function () { $('restoreFile').click(); });
+  $('restoreFile').addEventListener('change', function () {
+    var f = this.files && this.files[0];
+    var input = this;
+    if (!f) return;
+    var rd = new FileReader();
+    rd.onload = function () { restoreFrom(String(rd.result)); input.value = ''; };
+    rd.onerror = function () { flashNote('That file could not be read.'); input.value = ''; };
+    rd.readAsText(f);
+  });
+
+  renderNote();
+  render();
+  loadSeed();
+
+  // Offline: cache the app the first time it loads
+  if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+    window.addEventListener('load', function () {
+      navigator.serviceWorker.register('sw.js').catch(function () { /* offline cache is optional */ });
+    });
+  }
+})();
+</script>
+</body>
+</html>
