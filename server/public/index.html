@@ -626,7 +626,6 @@ time { display: block; color: var(--ink-soft); font-size: 0.82rem; }
       <span class="deck" aria-hidden="true"><i></i><i></i><i></i></span>
       <h1>Monopoly Deal Tally</h1>
     </div>
-    <p class="sub" id="sub">First to three full sets in different colors wins the game. Tap +1 win for whoever takes it, or &minus;1 to take back their latest win.</p>
   </div>
 </header>
 
@@ -1498,7 +1497,6 @@ time { display: block; color: var(--ink-soft); font-size: 0.82rem; }
     Array.prototype.forEach.call(document.querySelectorAll('.tab'), function (b) {
       if (b.getAttribute('data-tab') === name) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
     });
-    $('sub').hidden = name !== 'overview';
     if (name === 'lead') renderStreet([nm(0), nm(1)]);
     if (name === 'levels') animateLevels();
     window.scrollTo(0, 0);
