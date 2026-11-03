@@ -9,6 +9,10 @@ A two-player Monopoly Deal win tracker with levels and XP. One shared game histo
 - Games are saved on the phone first and sent to the server when there is a connection, so the app works offline. The two phones pick up each other's games within a few seconds.
 - XP and levels are worked out from the shared game list, not stored. Changing the formula changes everyone's levels retroactively.
 
+## Screens
+
+A tab bar at the bottom switches between four pages: Overview (scoreboard and series), The Lead (line graph of the lead over time), Levels (progress rings, the road to Tycoon, a level-up celebration) and Game log.
+
 ## XP and levels
 
 - 10 XP each for playing a game, win or lose.

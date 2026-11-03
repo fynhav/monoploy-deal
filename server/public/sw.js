@@ -1,6 +1,6 @@
 /* Monopoly Deal Tally: offline cache.
    Change VERSION whenever you want every device to throw away its old copy. */
-const VERSION = 'v3';
+const VERSION = 'v4';
 const CACHE = 'deal-tally-' + VERSION;
 const CORE = [
   './', 'index.html', 'manifest.webmanifest',
