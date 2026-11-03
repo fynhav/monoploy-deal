@@ -86,6 +86,24 @@ function loadSeed() {
   }
 }
 
+// One-time import: put games in server/import.json ({"games":[{id,w,at}]}) and push. Each distinct file is applied once;
+// games already present are left alone, and nothing is ever deleted.
+function applyImport() {
+  let text;
+  try { text = fs.readFileSync(path.join(__dirname, 'import.json'), 'utf8'); } catch (e) { return; }
+  const key = 'import:' + crypto.createHash('sha256').update(text).digest('hex').slice(0, 16);
+  if (meta(key) === '1') return;
+  let data;
+  try { data = JSON.parse(text); } catch (e) { console.error('import.json is not valid JSON, skipped'); return; }
+  let added = 0;
+  for (const g of (data && data.games) || []) {
+    if (validGame(g)) added += Number(q.addGame.run(g.id, g.w, new Date(g.at).toISOString(), null, Date.now()).changes);
+  }
+  q.setMeta.run(key, '1');
+  if (added) bump();
+  console.log('imported ' + added + ' new games');
+}
+
 // ---------- helpers ----------
 const ID_RE = /^[A-Za-z0-9_-]{6,40}$/;
 function validGame(g) {
@@ -320,6 +338,7 @@ const server = http.createServer(async (req, res) => {
 
 // ---------- start ----------
 loadSeed();
+applyImport();
 // Forgotten PIN: set RESET_PIN to a player's name (or "all") in the Railway variables, redeploy, then remove it.
 if (process.env.RESET_PIN) {
   const want = process.env.RESET_PIN.trim().toLowerCase();

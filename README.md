@@ -25,6 +25,7 @@ The formula lives at the top of the logic block in `server/public/index.html` (`
 - Variables: `PIN_PEPPER` (a long random string; PINs are hashed with it, so keep it if you move the data).
 - Forgot a PIN: set `RESET_PIN` to the player's name (or `all`), redeploy, choose a new PIN in the app, then delete the variable.
 - `seed.json` loads the first 59 games once, when the database is first created. Changing it later does nothing.
+- `server/import.json` (`{"games": [{id, w, at}]}`) adds missing games once per distinct file, on the next start. Existing games are never touched or removed.
 
 ## Run it locally
 
