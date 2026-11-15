@@ -420,6 +420,37 @@ time { display: block; color: var(--ink-soft); font-size: 0.82rem; }
 
 /* ---- Levels ---- */
 .sband.sky { background: #AAD8F0; }
+/* ---- Series: finish, overall tally ---- */
+.finbtn { align-self: flex-start; }
+.ovs { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 10px; }
+.ovp { --c: var(--blue); display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 0; text-align: center; }
+.ovp.p1 { --c: var(--red); }
+.ovn { align-self: stretch; padding: 5px 6px; background: var(--c); color: var(--on-band); border: 1.5px solid var(--ink); border-radius: 8px; font-family: var(--font-display); font-stretch: 80%; font-weight: 800; font-size: 1.05rem; line-height: 1.15; overflow-wrap: anywhere; }
+.ovv { font-family: var(--font-display); font-weight: 800; font-size: 3.4rem; line-height: 1.05; color: var(--c); font-variant-numeric: tabular-nums; }
+.ovp.lead .ovv { text-shadow: 0 3px 0 var(--gold); }
+.ovd { font-family: var(--font-display); font-weight: 800; font-size: 2rem; color: var(--ink-soft); align-self: end; padding-bottom: 10px; }
+.ovl { margin: 0; text-align: center; }
+.past { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.prow { --c: var(--ink-soft); display: grid; grid-template-columns: 3.2rem minmax(0, 1fr); align-items: stretch; background: var(--face); border: 1.5px solid var(--ink); border-radius: 10px; overflow: hidden; }
+.prow.c0 { --c: var(--blue); }
+.prow.c1 { --c: var(--red); }
+.pno { display: grid; place-items: center; background: var(--c); color: var(--on-band); border-right: 1.5px solid var(--ink); font-family: var(--font-display); font-weight: 800; font-size: 1.05rem; }
+.ptxt { padding: 8px 12px; display: flex; flex-direction: column; min-width: 0; }
+.ptxt b { font-family: var(--font-display); font-stretch: 80%; font-weight: 800; font-size: 1.1rem; line-height: 1.2; overflow-wrap: anywhere; }
+.ptxt small { color: var(--ink-soft); font-size: 0.82rem; }
+.sep { list-style: none; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; background: var(--gold); border: 1.5px solid var(--ink); border-radius: 10px; font-weight: 700; font-size: 0.92rem; line-height: 1.25; }
+.sep span { min-width: 0; overflow-wrap: anywhere; }
+.sep .ghost { flex: none; min-height: 36px; padding: 0 10px; background: var(--face); font-size: 0.82rem; }
+.fin-note { margin: 0; padding-inline: 12px; font-size: 0.95rem; line-height: 1.35; }
+.fin-note small { display: block; margin-top: 6px; color: var(--ink-soft); font-size: 0.82rem; }
+.fin-btns { display: flex; flex-direction: column; gap: 8px; align-self: stretch; padding-inline: 12px; }
+.btn-main { min-height: 52px; padding: 0 14px; font: 700 1.05rem var(--font-body); color: var(--ink); background: var(--gold); border: 2px solid var(--ink); border-radius: 12px; box-shadow: 0 3px 0 var(--ink); cursor: pointer; }
+.btn-main:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--ink); }
+.btn-main:focus-visible, .ghost:focus-visible { outline: 3px solid var(--blue); outline-offset: 2px; }
+.lu-badge.wide { width: 132px; height: 132px; }
+.lu-badge.wide b { font-size: 3.2rem; }
+.lvlup.fin .lu-card { max-height: calc(100% - 24px); overflow-y: auto; }
+
 /* ---- Views and the bottom tab bar ---- */
 .view { display: flex; flex-direction: column; gap: 28px; }
 .view[hidden] { display: none; }
@@ -693,6 +724,22 @@ time { display: block; color: var(--ink-soft); font-size: 0.82rem; }
         <p class="label" style="margin-bottom:6px">Last 10 games, oldest to newest</p>
         <ol class="strip" id="strip"></ol>
       </div>
+      <button class="ghost finbtn" id="finish" type="button">Finish series &amp; start again</button>
+    </div>
+  </section>
+
+  <section class="series" aria-label="Overall">
+    <div class="sband sky"><span>Overall</span><span id="ovNote">no series finished yet</span></div>
+    <div class="sbody">
+      <div class="ovs" id="ovScore" role="group" aria-label="Series won">
+        <div class="ovp p0" id="ovp0"><span class="ovn" id="ovn0"></span><b class="ovv" id="ovv0">0</b></div>
+        <span class="ovd" aria-hidden="true">&ndash;</span>
+        <div class="ovp p1" id="ovp1"><span class="ovn" id="ovn1"></span><b class="ovv" id="ovv1">0</b></div>
+      </div>
+      <p class="label ovl">Series won</p>
+      <p class="fine" id="ovAll"></p>
+      <ol class="past" id="pastList" hidden></ol>
+      <p class="fine" id="ovHint">Finish a series to call a winner and start again from 0&ndash;0. XP, levels and the game log carry on.</p>
     </div>
   </section>
 
@@ -802,6 +849,19 @@ time { display: block; color: var(--ink-soft); font-size: 0.82rem; }
     </button>
   </div>
 </nav>
+
+<div class="lvlup fin" id="fin" hidden role="dialog" aria-modal="true" aria-labelledby="finBand">
+  <div class="confetti" id="finConfetti" aria-hidden="true"></div>
+  <div class="lu-card">
+    <div class="lu-band" id="finBand">Finish this series?</div>
+    <div class="lu-body" id="finBody"></div>
+    <p class="fin-note" id="finNote"></p>
+    <div class="fin-btns">
+      <button type="button" class="btn-main" id="finGo">Finish series</button>
+      <button type="button" class="ghost" id="finCancel">Cancel</button>
+    </div>
+  </div>
+</div>
 
 <div class="lvlup" id="lvlup" hidden role="dialog" aria-modal="true" aria-label="Level up">
   <div class="confetti" id="confetti" aria-hidden="true"></div>
@@ -1038,9 +1098,54 @@ time { display: block; color: var(--ink-soft); font-size: 0.82rem; }
       return g && (g.w === 0 || g.w === 1) && typeof g.id === 'string' && !isNaN(Date.parse(g.at));
     });
   }
+  // ---- Series ----
+  // A finished series is just a marker in time: every game up to it belongs to that series, the score starts again
+  // from 0, and XP carries on because it is worked out from all games.
+  function sortSeries(list) {
+    return list.slice().sort(function (a, b) { return (Date.parse(a.at) - Date.parse(b.at)) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0); });
+  }
+  function cleanSeries(list) {
+    if (!Array.isArray(list)) return [];
+    return list.filter(function (r) { return r && typeof r.id === 'string' && !isNaN(Date.parse(r.at)); })
+      .map(function (r) { return { id: r.id, at: r.at }; });
+  }
+  function applySeries(list, outbox) {
+    var byId = {};
+    list.forEach(function (r) { byId[r.id] = r; });
+    outbox.forEach(function (op) {
+      if (op.op === 'finish') byId[op.series.id] = op.series;
+      else if (op.op === 'unfinish') delete byId[op.id];
+    });
+    return sortSeries(Object.keys(byId).map(function (k) { return byId[k]; }));
+  }
+  function seriesWinner(wins) { return wins[0] > wins[1] ? 0 : wins[1] > wins[0] ? 1 : -1; }
+  // Split the game list (already in time order) into finished series and the one still being played.
+  // A marker with no games before it (two phones finishing at once) is not a series of its own.
+  function splitSeries(games, resets) {
+    var past = [], gi = 0, last = null;
+    sortSeries(resets).forEach(function (r) {
+      var t = Date.parse(r.at), chunk = [];
+      while (gi < games.length && Date.parse(games[gi].at) <= t) { chunk.push(games[gi]); gi++; }
+      if (chunk.length) {
+        var wins = computeStats(chunk).wins;
+        last = { no: past.length + 1, ids: [r.id], at: r.at, games: chunk, wins: wins, winner: seriesWinner(wins),
+          from: chunk[0].at, to: chunk[chunk.length - 1].at };
+        past.push(last);
+      } else if (last) { last.ids.push(r.id); }
+    });
+    return { past: past, current: games.slice(gi) };
+  }
+  // Series won by each player (a tied series counts for neither) and how many were tied.
+  function overallTally(past) {
+    var won = [0, 0], ties = 0;
+    past.forEach(function (p) { if (p.winner < 0) ties++; else won[p.winner]++; });
+    return { won: won, ties: ties };
+  }
   // ---- end logic ----
 
-  var state = { names: DEFAULTS.slice(), games: [] };
+  var state = { names: DEFAULTS.slice(), games: [], series: [] };
+  var sp = { past: [], current: [] };   // the games split into finished series and the current one
+  var curGames = [];                     // games of the series being played now
   var me = null;            // 0 or 1 once signed in
   var rev = 0;              // newest server revision this phone has seen (0 = none yet)
   var outbox = [];          // changes made here that the server has not confirmed yet
@@ -1073,7 +1178,8 @@ time { display: block; color: var(--ink-soft); font-size: 0.82rem; }
     } catch (e) { storageOk = false; }
   }
   function validOp(op) {
-    return !!op && ((op.op === 'add' && cleanGames([op.game]).length === 1) || (op.op === 'del' && typeof op.id === 'string'));
+    return !!op && ((op.op === 'add' && cleanGames([op.game]).length === 1) || (op.op === 'del' && typeof op.id === 'string') ||
+      (op.op === 'finish' && cleanSeries([op.series]).length === 1) || (op.op === 'unfinish' && typeof op.id === 'string'));
   }
   function loadLocal() {
     try {
@@ -1087,6 +1193,7 @@ time { display: block; color: var(--ink-soft); font-size: 0.82rem; }
         });
       }
       state.games = sortGames(cleanGames(d.games));
+      state.series = sortSeries(cleanSeries(d.series));
       me = (d.me === 0 || d.me === 1) ? d.me : null;
       rev = Number(d.rev) || 0;
       outbox = Array.isArray(d.outbox) ? d.outbox.filter(validOp) : [];
@@ -1094,7 +1201,7 @@ time { display: block; color: var(--ink-soft); font-size: 0.82rem; }
   }
   function saveLocal() {
     try {
-      localStorage.setItem(KEY, JSON.stringify({ names: state.names, games: state.games, me: me, rev: rev, outbox: outbox }));
+      localStorage.setItem(KEY, JSON.stringify({ names: state.names, games: state.games, series: state.series, me: me, rev: rev, outbox: outbox }));
       storageOk = true;
     } catch (e) { storageOk = false; }
   }
@@ -1134,11 +1241,13 @@ time { display: block; color: var(--ink-soft); font-size: 0.82rem; }
   }
 
   function render() {
-    var st = computeStats(state.games);
+    sp = splitSeries(state.games, state.series);
+    curGames = sp.current;
+    var st = computeStats(curGames);
     var names = [nm(0), nm(1)];
     var mk = marks(names);
     var total = st.wins[0] + st.wins[1];
-    var n = state.games.length;
+    var n = curGames.length;
 
     [0, 1].forEach(function (i) {
       var w = st.wins[i];
@@ -1157,13 +1266,14 @@ time { display: block; color: var(--ink-soft); font-size: 0.82rem; }
     });
 
     $('lead').textContent = leadText(st.wins, names);
-    $('games').textContent = n === 1 ? '1 game played' : n + ' games played';
+    $('games').textContent = (sp.past.length ? 'Series ' + (sp.past.length + 1) + ' · ' : '') + (n === 1 ? '1 game played' : n + ' games played');
+    $('finish').disabled = n === 0 || mode !== 'ready';
     $('s0').style.width = total ? (st.wins[0] / total * 100) + '%' : '0';
     $('s1').style.width = total ? (st.wins[1] / total * 100) + '%' : '0';
     $('split').setAttribute('aria-label',
       names[0] + ' ' + st.wins[0] + ' wins, ' + names[1] + ' ' + st.wins[1] + ' wins');
 
-    var last = state.games.slice(-10);
+    var last = curGames.slice(-10);
     var s = '';
     for (var k = 0; k < 10; k++) {
       var g = last[k];
@@ -1177,22 +1287,71 @@ time { display: block; color: var(--ink-soft); font-size: 0.82rem; }
     $('strip').innerHTML = s;
     if (tab === 'lead') renderStreet(names);
 
-    var from = showAll ? 0 : Math.max(0, n - LOG_LIMIT);
-    var rows = '';
-    for (var i = n - 1; i >= from; i--) {
-      var gm = state.games[i];
-      rows += '<li class="row"><span class="stub c' + gm.w + '"><span class="no">#' + (i + 1) + '</span></span>' +
-        '<div class="txt"><span class="who">' + esc(names[gm.w]) + '</span>' +
-        '<time datetime="' + esc(gm.at) + '">' + esc(fmtDate(new Date(gm.at))) + '</time></div>' +
-        '<button type="button" class="rm" data-id="' + esc(gm.id) + '" aria-label="Remove game ' + (i + 1) + '">&times;</button></li>';
-    }
-    $('list').innerHTML = rows;
-    $('list').hidden = n === 0;
-    $('emptyLog').hidden = n !== 0;
-    $('more').hidden = n <= LOG_LIMIT;
-    $('more').textContent = showAll ? 'Show latest ' + LOG_LIMIT + ' only' : 'Show all ' + n + ' games';
+    renderLog(names);
+    renderOverall(names);
     $('undo').disabled = n === 0 || mode !== 'ready';
     renderLevels(names);
+  }
+
+  // The game log, newest first. A yellow bar marks where each finished series ended; game numbers start again in each series.
+  function renderLog(names) {
+    var total = state.games.length, limit = showAll ? Infinity : LOG_LIMIT, shown = 0, rows = '', stop = false;
+    var blocks = sp.past.concat([{ current: true, games: sp.current }]);
+    for (var b = blocks.length - 1; b >= 0 && !stop; b--) {
+      var B = blocks[b];
+      if (!B.current) {
+        if (shown >= limit) break;
+        rows += '<li class="sep"><span>' + esc(seriesLine(B, names)) + '</span>' +
+          (b === sp.past.length - 1 ? '<button type="button" class="ghost reopen" data-ids="' + esc(B.ids.join(',')) + '">Reopen</button>' : '') + '</li>';
+      }
+      for (var i = B.games.length - 1; i >= 0; i--) {
+        if (shown >= limit) { stop = true; break; }
+        var gm = B.games[i];
+        rows += '<li class="row"><span class="stub c' + gm.w + '"><span class="no">#' + (i + 1) + '</span></span>' +
+          '<div class="txt"><span class="who">' + esc(names[gm.w]) + '</span>' +
+          '<time datetime="' + esc(gm.at) + '">' + esc(fmtDate(new Date(gm.at))) + '</time></div>' +
+          '<button type="button" class="rm" data-id="' + esc(gm.id) + '" aria-label="Remove game ' + (i + 1) + (B.current ? '' : ' of series ' + B.no) + '">&times;</button></li>';
+        shown++;
+      }
+    }
+    $('list').innerHTML = rows;
+    $('list').hidden = total === 0;
+    $('emptyLog').hidden = total !== 0;
+    $('more').hidden = total <= LOG_LIMIT;
+    $('more').textContent = showAll ? 'Show latest ' + LOG_LIMIT + ' only' : 'Show all ' + total + ' games';
+  }
+  function seriesLine(p, names) {
+    var score = p.wins[0] + '–' + p.wins[1];
+    if (p.winner < 0) return 'Series ' + p.no + ' finished · tied ' + score;
+    return 'Series ' + p.no + ' finished · ' + names[p.winner] + ' won ' + (p.wins[p.winner] + '–' + p.wins[1 - p.winner]);
+  }
+  function fmtShortDay(iso) {
+    try { return new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }); } catch (e) { return iso.slice(0, 10); }
+  }
+  // Overall: series won by each player, all-time games, and the list of finished series.
+  function renderOverall(names) {
+    var t = overallTally(sp.past), all = computeStats(state.games).wins;
+    [0, 1].forEach(function (i) {
+      $('ovn' + i).textContent = names[i];
+      $('ovv' + i).textContent = t.won[i];
+      $('ovp' + i).classList.toggle('lead', t.won[i] > t.won[1 - i]);
+    });
+    var k = sp.past.length;
+    $('ovNote').textContent = k ? k + ' series finished' : 'no series finished yet';
+    var n = state.games.length;
+    $('ovAll').textContent = 'All games ever: ' + names[0] + ' ' + all[0] + ' – ' + all[1] + ' ' + names[1] + ' (' + n + (n === 1 ? ' game' : ' games') + ')' +
+      (t.ties ? '. ' + t.ties + ' series ended tied.' : '');
+    $('ovHint').hidden = k > 0;
+    var html = '';
+    for (var i = k - 1; i >= 0; i--) {
+      var p = sp.past[i], sc = p.wins[0] + '–' + p.wins[1];
+      var head = p.winner < 0 ? 'Tied ' + sc : names[p.winner] + ' won ' + p.wins[p.winner] + '–' + p.wins[1 - p.winner];
+      var gm = p.games.length;
+      html += '<li class="prow c' + (p.winner < 0 ? 'x' : p.winner) + '"><span class="pno">#' + p.no + '</span><div class="ptxt"><b>' + esc(head) + '</b>' +
+        '<small>' + gm + (gm === 1 ? ' game' : ' games') + ' · ' + esc(fmtShortDay(p.from)) + (fmtShortDay(p.from) === fmtShortDay(p.to) ? '' : ' – ' + esc(fmtShortDay(p.to))) + '</small></div></li>';
+    }
+    $('pastList').innerHTML = html;
+    $('pastList').hidden = k === 0;
   }
 
   // ----- The Lead: line graph -----
@@ -1200,15 +1359,16 @@ time { display: block; color: var(--ink-soft); font-size: 0.82rem; }
   // geometry of the graph, used by the hover card and pointer maths (set each time it is drawn)
   var geo = { x: function () { return 0; }, idx: function () { return -1; }, hw: 4, ys: null, mid: 0 };
   function renderStreet(names) {
-    var n = state.games.length;
-    var series = leadSeries(state.games);
+    var n = curGames.length;
+    var series = leadSeries(curGames);
     var f = leadFacts(series);
     var box = $('street');
     var head = aheadText(f.current, names, n);
     $('aheadLead').textContent = head;
     $('streetNote').textContent = n ? 'after ' + n + (n === 1 ? ' game' : ' games') : 'no games yet';
     $('streetFacts').textContent = n ? factsText(f, names) : 'The line shows who is ahead after every game.';
-    $('viewNote').textContent = 'The line is the lead after each game, laid out by date. Each day you played gets room for its games; shaded stretches are days with no games. Above the dashed line ' + names[0] + ' is ahead; below it ' + names[1] + ' is.';
+    $('viewNote').textContent = 'The line is the lead after each game, laid out by date. Each day you played gets room for its games; shaded stretches are days with no games. Above the dashed line ' + names[0] + ' is ahead; below it ' + names[1] + ' is.' +
+      (sp.past.length ? ' It covers the current series only, so it starts again after each finished series.' : '');
     var sw = function (c) {
       return '<span class="sw"><svg width="16" height="14" viewBox="0 0 16 14" aria-hidden="true"><rect class="' + c + '" x="1" y="1" width="14" height="12" rx="2"/></svg>';
     };
@@ -1227,7 +1387,7 @@ time { display: block; color: var(--ink-soft); font-size: 0.82rem; }
     var plotW = W - PADL - PADR, plotH = H - PADT - PADB;
     function Y(v) { return PADT + (hi - v) / (hi - lo) * plotH; }
     var yz = Y(0), s = '';
-    var lay = dayLayout(state.games, 8, 30, 8, 56);
+    var lay = dayLayout(curGames, 8, 30, 8, 56);
     var S = lay.width ? plotW / lay.width : 1;
     function X(u) { return PADL + u * S; }
     var xs = lay.off.map(X), ys = series.map(Y);
@@ -1304,13 +1464,13 @@ time { display: block; color: var(--ink-soft); font-size: 0.82rem; }
     catch (e) { return d.toISOString().slice(0, 10); }
   }
   function tipHtml(k) {
-    var t = tipInfo(state.games, k, [nm(0), nm(1)]);
+    var t = tipInfo(curGames, k, [nm(0), nm(1)]);
     return '<span><b>Game ' + t.num + '</b> · ' + esc(t.winner) + ' won</span>' +
       '<span class="lt' + (t.side < 0 ? '' : ' c' + t.side) + '">' + (t.side < 0 ? '' : 'Lead: ') + esc(t.leadText) + '</span>' +
-      '<span class="sc">Score ' + t.score + ' · ' + esc(fmtShort(new Date(state.games[k].at))) + '</span>';
+      '<span class="sc">Score ' + t.score + ' · ' + esc(fmtShort(new Date(curGames[k].at))) + '</span>';
   }
   function showTip(k) {
-    var tip = $('tip'), hov = $('hov'), n = state.games.length;
+    var tip = $('tip'), hov = $('hov'), n = curGames.length;
     if (k < 0 || k >= n) {
       curK = -1;
       tip.hidden = true;
@@ -1445,7 +1605,8 @@ time { display: block; color: var(--ink-soft); font-size: 0.82rem; }
       '<li>' + XP_PLAY + ' XP each for playing a game, win or lose.</li>' +
       '<li>' + XP_WIN + ' XP extra for winning it.</li>' +
       '<li>Win streak bonus on each win: 2 in a row +' + streakBonus(2) + ', 3 in a row +' + streakBonus(3) + ', 4 or more +' + streakBonus(4) + '.</li>' +
-      '<li>XP is worked out from the shared game list, so removing a game takes its XP back.</li>';
+      '<li>XP is worked out from the shared game list, so removing a game takes its XP back.</li>' +
+      '<li>Finishing a series restarts the score at 0&ndash;0 but keeps all XP, levels and win streaks.</li>';
     $('howLevels').innerHTML = LEVELS.map(function (l, i) {
       return '<li><b>' + (i + 1) + '</b> ' + l.name + '<span>' + fmtXp(l.at) + '</span></li>';
     }).join('');
@@ -1539,7 +1700,10 @@ time { display: block; color: var(--ink-soft); font-size: 0.82rem; }
     function next() {
       if (!outbox.length) { flushing = false; return Promise.resolve(true); }
       var op = outbox[0];
-      var req = op.op === 'add' ? api('POST', 'api/games', op.game) : api('DELETE', 'api/games/' + encodeURIComponent(op.id));
+      var req = op.op === 'add' ? api('POST', 'api/games', op.game)
+        : op.op === 'del' ? api('DELETE', 'api/games/' + encodeURIComponent(op.id))
+        : op.op === 'finish' ? api('POST', 'api/series', op.series)
+        : api('DELETE', 'api/series/' + encodeURIComponent(op.id));
       return req.then(function (r) {
         if (r.status === 401) { flushing = false; signedOut(); return false; }
         if (r.status >= 500 || r.status === 429) throw new Error('server');
@@ -1570,6 +1734,7 @@ time { display: block; color: var(--ink-soft); font-size: 0.82rem; }
         state.names = [0, 1].map(function (i) { return String(d.names[i] || DEFAULTS[i]).slice(0, 18); });
       }
       state.games = applyOutbox(cleanGames(d.games), outbox);
+      state.series = applySeries(cleanSeries(d.series), outbox);
       saveLocal(); setNameInputs(); render(); renderNote();
     }).catch(function () { busy = false; serverOk = false; renderNote(); });
   }
@@ -1593,6 +1758,89 @@ time { display: block; color: var(--ink-soft); font-size: 0.82rem; }
     outbox.push({ op: 'del', id: id });   // always sent, even if the add is still waiting: the server ignores a delete it has no game for
     saveLocal(); render(); renderNote();
     flush().then(renderNote);
+  }
+
+  // ----- Finishing a series -----
+  var finMode = null, finIds = null;
+  function finConfetti() {
+    var bits = '';
+    for (var k = 0; k < 56; k++) {
+      var w = 6 + Math.random() * 6, h = w * (1 + Math.random());
+      bits += '<i style="left:' + (Math.random() * 100).toFixed(1) + '%;width:' + w.toFixed(1) + 'px;height:' + h.toFixed(1) +
+        'px;background:' + CONFETTI[k % CONFETTI.length] + ';--dx:' + Math.round(-60 + Math.random() * 120) + 'px;--rot:' + Math.round(360 + Math.random() * 720) +
+        'deg;--d:' + (2.4 + Math.random() * 1.8).toFixed(2) + 's;--w:' + (Math.random() * 0.8).toFixed(2) + 's"></i>';
+    }
+    $('finConfetti').innerHTML = bits;
+  }
+  function showFin(band, bodyHtml, note, goText, cancelText) {
+    $('finBand').textContent = band;
+    $('finBody').innerHTML = bodyHtml;
+    $('finNote').innerHTML = note;
+    $('finGo').textContent = goText;
+    $('finCancel').textContent = cancelText;
+    $('finCancel').hidden = !cancelText;
+    var el = $('fin');
+    el.hidden = false;
+    el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
+    $('finGo').focus();
+  }
+  function closeFin() {
+    var el = $('fin');
+    el.hidden = true; el.classList.remove('show');
+    $('finConfetti').innerHTML = '';
+    finMode = null; finIds = null;
+  }
+  function scoreBadge(i, label, value, extra) {
+    return '<div class="lu p' + i + '"><div class="lu-badge' + (extra || '') + '"><small>' + label + '</small><b>' + value + '</b></div><p class="lu-name">' + esc(nm(i)) + '</p></div>';
+  }
+  function openFinish() {
+    if (mode !== 'ready' || !curGames.length) return;
+    var w = computeStats(curGames).wins, n = curGames.length, win = seriesWinner(w);
+    var line = win < 0 ? 'It is tied ' + w[0] + '–' + w[1] + ' after ' + n + (n === 1 ? ' game.' : ' games.')
+      : esc(nm(win)) + ' wins this series ' + w[win] + '–' + w[1 - win] + ' after ' + n + (n === 1 ? ' game.' : ' games.');
+    finMode = 'finish';
+    showFin('Finish series ' + (sp.past.length + 1) + '?', scoreBadge(0, 'WINS', w[0]) + scoreBadge(1, 'WINS', w[1]),
+      line + '<small>The score goes back to 0–0. XP, levels and the game log stay as they are.</small>', 'Finish series', 'Cancel');
+  }
+  function doFinish() {
+    var n = curGames.length;
+    if (!n) { closeFin(); return; }
+    var w = computeStats(curGames).wins, win = seriesWinner(w), no = sp.past.length + 1;
+    var at = new Date(Math.max(Date.now(), Date.parse(curGames[n - 1].at) + 1)).toISOString();
+    var r = { id: newId(), at: at };
+    state.series = sortSeries(state.series.concat([r]));
+    outbox.push({ op: 'finish', series: r });
+    saveLocal(); render(); renderNote();
+    flush().then(renderNote);
+    // show who won
+    var t = overallTally(sp.past);
+    var overall = 'Overall: ' + esc(nm(0)) + ' ' + t.won[0] + ' – ' + t.won[1] + ' ' + esc(nm(1)) + '.<small>Series ' + (no + 1) + ' starts at 0–0. XP and levels carry on.</small>';
+    finMode = 'done';
+    if (win < 0) {
+      showFin('Series ' + no + ' tied', scoreBadge(0, 'WINS', w[0]) + scoreBadge(1, 'WINS', w[1]), 'Dead level at ' + w[0] + '–' + w[1] + ' after ' + n + (n === 1 ? ' game. ' : ' games. ') + overall, 'Start series ' + (no + 1), '');
+    } else {
+      showFin('Series ' + no + ' won!', scoreBadge(win, 'WINS', w[win], ' wide').replace('</p></div>', '</p><p class="lu-tier">wins ' + w[win] + '–' + w[1 - win] + '</p></div>'),
+        'After ' + n + (n === 1 ? ' game. ' : ' games. ') + overall, 'Start series ' + (no + 1), '');
+      if (!reduced()) finConfetti();
+    }
+  }
+  function openReopen(ids) {
+    var p = sp.past[sp.past.length - 1];
+    if (!p || mode !== 'ready') return;
+    finMode = 'reopen'; finIds = ids;
+    var names = [nm(0), nm(1)];
+    showFin('Reopen series ' + p.no + '?', '',
+      esc(seriesLine(p, names).replace('Series ' + p.no + ' finished · ', 'Series ' + p.no + ': ')) + '.<small>Its games go back into the current series, together with anything played since, and the overall tally drops by one.</small>', 'Reopen series', 'Cancel');
+  }
+  function doReopen() {
+    var ids = finIds || [];
+    ids.forEach(function (id) {
+      state.series = state.series.filter(function (r) { return r.id !== id; });
+      outbox.push({ op: 'unfinish', id: id });
+    });
+    saveLocal(); render(); renderNote();
+    flush().then(renderNote);
+    closeFin();
   }
 
   // ----- Sign in -----
@@ -1671,7 +1919,7 @@ time { display: block; color: var(--ink-soft); font-size: 0.82rem; }
   function backUp() {
     var text = JSON.stringify({
       app: 'monopoly-deal-tally', version: 2, exportedAt: new Date().toISOString(),
-      names: [nm(0), nm(1)], games: state.games
+      names: [nm(0), nm(1)], games: state.games, series: state.series
     }, null, 1);
     var name = 'deal-tally-backup-' + new Date().toISOString().slice(0, 10) + '.json';
     try {
@@ -1698,21 +1946,33 @@ time { display: block; color: var(--ink-soft); font-size: 0.82rem; }
     input.value = state.names[i];
     $('win' + i).addEventListener('click', function () { addWin(i); });
     $('minus' + i).addEventListener('click', function () {
-      var id = lastWinId(state.games, i);
+      var id = lastWinId(curGames, i);
       if (id) removeGame(id);
     });
     $('who' + i).addEventListener('click', function () { pickUser(i); });
   });
 
   $('undo').addEventListener('click', function () {
-    var n = state.games.length;
-    if (n) removeGame(state.games[n - 1].id);
+    var n = curGames.length;
+    if (n) removeGame(curGames[n - 1].id);
   });
 
   $('list').addEventListener('click', function (e) {
     var btn = e.target.closest ? e.target.closest('.rm') : null;
-    if (btn) removeGame(btn.getAttribute('data-id'));
+    if (btn) { removeGame(btn.getAttribute('data-id')); return; }
+    var re = e.target.closest ? e.target.closest('.reopen') : null;
+    if (re) openReopen((re.getAttribute('data-ids') || '').split(',').filter(Boolean));
   });
+
+  $('finish').addEventListener('click', openFinish);
+  $('finCancel').addEventListener('click', closeFin);
+  $('finGo').addEventListener('click', function () {
+    if (finMode === 'finish') doFinish();
+    else if (finMode === 'reopen') doReopen();
+    else closeFin();
+  });
+  $('fin').addEventListener('click', function (e) { if (e.target === $('fin') && finMode !== 'done') closeFin(); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !$('fin').hidden) closeFin(); });
 
   $('more').addEventListener('click', function () {
     showAll = !showAll;
@@ -1767,7 +2027,7 @@ time { display: block; color: var(--ink-soft); font-size: 0.82rem; }
   });
   sBox.addEventListener('scroll', function () { if (curK >= 0) showTip(curK); });
   sBox.addEventListener('keydown', function (e) {
-    var n = state.games.length, k = pinK;
+    var n = curGames.length, k = pinK;
     if (!n) return;
     if (e.key === 'ArrowLeft') k = k < 0 ? n - 1 : Math.max(0, k - 1);
     else if (e.key === 'ArrowRight') k = k < 0 ? n - 1 : Math.min(n - 1, k + 1);

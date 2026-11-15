@@ -2,6 +2,7 @@
 // Monopoly Deal Tally server. No dependencies: Node's built-in http, crypto and SQLite.
 //   - two fixed players (from seed.json), each claims their account by choosing a PIN
 //   - one shared game history; XP and levels are worked out in the app from that history
+//   - "series" markers split the history into finished series (the score restarts, XP carries on)
 //   - serves the app from ./public so everything lives at one address
 const http = require('node:http');
 const fs = require('node:fs');
@@ -44,6 +45,14 @@ db.exec(`
     created INTEGER NOT NULL
   );
   CREATE INDEX IF NOT EXISTS games_at ON games (at, id);
+  -- A finished series: every game up to this moment belongs to it, and the score starts again from 0.
+  -- XP and levels are worked out from all games, so they carry on across series.
+  CREATE TABLE IF NOT EXISTS series (
+    id TEXT PRIMARY KEY,
+    at TEXT NOT NULL,
+    by_slot INTEGER,
+    created INTEGER NOT NULL
+  );
   CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT);
 `);
 const q = {
@@ -64,7 +73,10 @@ const q = {
   games: db.prepare('SELECT id, w, at FROM games ORDER BY at, id'),
   addGame: db.prepare('INSERT OR IGNORE INTO games (id, w, at, by_slot, created) VALUES (?, ?, ?, ?, ?)'),
   delGame: db.prepare('DELETE FROM games WHERE id = ?'),
-  countGames: db.prepare('SELECT COUNT(*) AS n FROM games')
+  countGames: db.prepare('SELECT COUNT(*) AS n FROM games'),
+  series: db.prepare('SELECT id, at FROM series ORDER BY at, id'),
+  addSeries: db.prepare('INSERT OR IGNORE INTO series (id, at, by_slot, created) VALUES (?, ?, ?, ?)'),
+  delSeries: db.prepare('DELETE FROM series WHERE id = ?')
 };
 const meta = (k) => { const r = q.getMeta.get(k); return r ? r.v : null; };
 const rev = () => Number(meta('rev') || 0);
@@ -182,7 +194,8 @@ function state(me) {
     rev: rev(),
     me: me,
     names: users.map((u) => u.name),
-    games: q.games.all().map((g) => ({ id: g.id, w: g.w, at: g.at }))
+    games: q.games.all().map((g) => ({ id: g.id, w: g.w, at: g.at })),
+    series: q.series.all().map((r) => ({ id: r.id, at: r.at }))
   };
 }
 
@@ -268,9 +281,26 @@ async function api(req, res, url, secure) {
     return send(res, 200, { rev: rev() });
   }
 
+  if (p === '/api/series' && m === 'POST') {
+    const s = await readJson(req);
+    if (!s || typeof s.id !== 'string' || !ID_RE.test(s.id) || typeof s.at !== 'string' || isNaN(Date.parse(s.at))) return send(res, 400, { error: 'bad-series' });
+    const at = new Date(s.at);
+    if (at.getTime() > Date.now() + 36 * 3600 * 1000) return send(res, 400, { error: 'bad-series' });
+    const r = q.addSeries.run(s.id, at.toISOString(), who.slot, Date.now());
+    if (r.changes) bump();
+    return send(res, 200, { rev: rev() });
+  }
+
+  const delSeries = /^\/api\/series\/([A-Za-z0-9_-]{6,40})$/.exec(p);
+  if (delSeries && m === 'DELETE') {
+    const r = q.delSeries.run(delSeries[1]);
+    if (r.changes) bump();
+    return send(res, 200, { rev: rev() });
+  }
+
   if (p === '/api/export' && m === 'GET') {
     const s = state(who.slot);
-    return send(res, 200, { app: 'monopoly-deal-tally', version: 2, exportedAt: new Date().toISOString(), names: s.names, games: s.games });
+    return send(res, 200, { app: 'monopoly-deal-tally', version: 2, exportedAt: new Date().toISOString(), names: s.names, games: s.games, series: s.series });
   }
 
   if (p === '/api/change-pin' && m === 'POST') {

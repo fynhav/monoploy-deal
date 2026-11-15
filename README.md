@@ -13,6 +13,10 @@ A two-player Monopoly Deal win tracker with levels and XP. One shared game histo
 
 A tab bar at the bottom switches between four pages: Overview (scoreboard and series), The Lead (line graph of the lead over time), Levels (progress rings, the road to Tycoon, a level-up celebration) and Game log.
 
+## Series
+
+The score you play on the Overview is one series. **Finish series & start again** (Series card) asks for confirmation, shows who won, and starts the next series at 0–0. Nothing is deleted: the games stay in the log under a yellow "Series finished" bar, XP and levels carry on because they come from every game, and the Overall card keeps the tally of series won plus a list of finished series. The latest finish can be undone with **Reopen** in the game log. A finished series is stored as a marker with a timestamp (`series` table, `/api/series`); games up to that moment belong to it.
+
 ## XP and levels
 
 - 10 XP each for playing a game, win or lose.
