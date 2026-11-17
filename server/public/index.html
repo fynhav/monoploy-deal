@@ -451,6 +451,16 @@ time { display: block; color: var(--ink-soft); font-size: 0.82rem; }
 .lu-badge.wide b { font-size: 3.2rem; }
 .lvlup.fin .lu-card { max-height: calc(100% - 24px); overflow-y: auto; }
 
+/* ---- The Lead: series picker ---- */
+.spick { display: flex; flex-wrap: wrap; gap: 8px; }
+.spick[hidden] { display: none; }
+.spick button { min-height: 40px; padding: 0 14px; display: inline-flex; align-items: center; gap: 7px; background: var(--face); color: var(--ink); border: 1.5px solid var(--ink); border-radius: 999px; font: 600 0.9rem var(--font-body); cursor: pointer; }
+.spick button[aria-pressed="true"] { background: var(--gold); box-shadow: 0 2px 0 var(--ink); }
+.spick button:focus-visible { outline: 3px solid var(--blue); outline-offset: 2px; }
+.spick i { width: 11px; height: 11px; border-radius: 50%; border: 1.5px solid var(--ink); background: var(--paper); display: inline-block; }
+.spick i.c0 { background: var(--blue); }
+.spick i.c1 { background: var(--red); }
+
 /* ---- Views and the bottom tab bar ---- */
 .view { display: flex; flex-direction: column; gap: 28px; }
 .view[hidden] { display: none; }
@@ -757,6 +767,7 @@ time { display: block; color: var(--ink-soft); font-size: 0.82rem; }
   <section class="series" aria-label="Lead over time">
     <div class="sband green"><span>The Lead</span><span id="streetNote">no games yet</span></div>
     <div class="sbody">
+      <div class="spick" id="seriesPick" role="group" aria-label="Choose a series" hidden></div>
       <p class="lead" id="aheadLead" aria-live="polite">No games yet</p>
       <div class="legend" id="legend"></div>
       <div class="streetwrap" id="streetWrap">
@@ -1146,6 +1157,8 @@ time { display: block; color: var(--ink-soft); font-size: 0.82rem; }
   var state = { names: DEFAULTS.slice(), games: [], series: [] };
   var sp = { past: [], current: [] };   // the games split into finished series and the current one
   var curGames = [];                     // games of the series being played now
+  var leadPick = null;                   // series shown on The Lead: null follows the current one, otherwise an index into sp.past
+  var leadGames = [], leadIdx = 0;       // games behind the lead graph and which series they are
   var me = null;            // 0 or 1 once signed in
   var rev = 0;              // newest server revision this phone has seen (0 = none yet)
   var outbox = [];          // changes made here that the server has not confirmed yet
@@ -1243,6 +1256,11 @@ time { display: block; color: var(--ink-soft); font-size: 0.82rem; }
   function render() {
     sp = splitSeries(state.games, state.series);
     curGames = sp.current;
+    // which series the lead graph shows
+    var curNo = sp.past.length;
+    if (leadPick !== null && (leadPick < 0 || leadPick >= curNo)) leadPick = null;
+    leadIdx = leadPick !== null ? leadPick : (curGames.length || !curNo ? curNo : curNo - 1);
+    leadGames = leadIdx === curNo ? curGames : sp.past[leadIdx].games;
     var st = computeStats(curGames);
     var names = [nm(0), nm(1)];
     var mk = marks(names);
@@ -1359,16 +1377,19 @@ time { display: block; color: var(--ink-soft); font-size: 0.82rem; }
   // geometry of the graph, used by the hover card and pointer maths (set each time it is drawn)
   var geo = { x: function () { return 0; }, idx: function () { return -1; }, hw: 4, ys: null, mid: 0 };
   function renderStreet(names) {
-    var n = curGames.length;
-    var series = leadSeries(curGames);
+    var n = leadGames.length;
+    var series = leadSeries(leadGames);
     var f = leadFacts(series);
     var box = $('street');
-    var head = aheadText(f.current, names, n);
+    var isPast = leadIdx < sp.past.length, P = isPast ? sp.past[leadIdx] : null;
+    var head = isPast ? (P.winner < 0 ? 'Series ' + P.no + ' ended tied ' + P.wins[0] + '–' + P.wins[1]
+      : names[P.winner] + ' won series ' + P.no + ', ' + P.wins[P.winner] + '–' + P.wins[1 - P.winner]) : aheadText(f.current, names, n);
     $('aheadLead').textContent = head;
-    $('streetNote').textContent = n ? 'after ' + n + (n === 1 ? ' game' : ' games') : 'no games yet';
+    $('streetNote').textContent = (sp.past.length ? 'series ' + (leadIdx + 1) + ' · ' : '') + (n ? (isPast ? n : 'after ' + n) + (n === 1 ? ' game' : ' games') : 'no games yet');
+    renderPick(names);
     $('streetFacts').textContent = n ? factsText(f, names) : 'The line shows who is ahead after every game.';
     $('viewNote').textContent = 'The line is the lead after each game, laid out by date. Each day you played gets room for its games; shaded stretches are days with no games. Above the dashed line ' + names[0] + ' is ahead; below it ' + names[1] + ' is.' +
-      (sp.past.length ? ' It covers the current series only, so it starts again after each finished series.' : '');
+      (sp.past.length ? ' Each series has its own graph, so pick one above to look at an earlier series.' : '');
     var sw = function (c) {
       return '<span class="sw"><svg width="16" height="14" viewBox="0 0 16 14" aria-hidden="true"><rect class="' + c + '" x="1" y="1" width="14" height="12" rx="2"/></svg>';
     };
@@ -1379,6 +1400,21 @@ time { display: block; color: var(--ink-soft); font-size: 0.82rem; }
     showTip(curK >= 0 && curK < n ? curK : pinK);
   }
 
+  function renderPick(names) {
+    var box = $('seriesPick'), k = sp.past.length;
+    box.hidden = k === 0;
+    if (!k) { box.innerHTML = ''; return; }
+    var html = '';
+    for (var i = 0; i <= k; i++) {
+      var isCur = i === k, win = isCur ? -1 : sp.past[i].winner;
+      html += '<button type="button" data-i="' + i + '" aria-pressed="' + (i === leadIdx) + '"' +
+        (isCur ? '' : ' aria-label="Series ' + (i + 1) + (win < 0 ? ', tied' : ', won by ' + esc(names[win])) + '"') + '>' +
+        (isCur ? '' : '<i class="' + (win < 0 ? '' : 'c' + win) + '" aria-hidden="true"></i>') +
+        'Series ' + (i + 1) + (isCur ? ' · now' : '') + '</button>';
+    }
+    box.innerHTML = html;
+  }
+
   function drawLine(names, series, f, head, box) {
     var n = series.length;
     var W = Math.max(240, box.clientWidth || 340), H = 210;
@@ -1387,7 +1423,7 @@ time { display: block; color: var(--ink-soft); font-size: 0.82rem; }
     var plotW = W - PADL - PADR, plotH = H - PADT - PADB;
     function Y(v) { return PADT + (hi - v) / (hi - lo) * plotH; }
     var yz = Y(0), s = '';
-    var lay = dayLayout(curGames, 8, 30, 8, 56);
+    var lay = dayLayout(leadGames, 8, 30, 8, 56);
     var S = lay.width ? plotW / lay.width : 1;
     function X(u) { return PADL + u * S; }
     var xs = lay.off.map(X), ys = series.map(Y);
@@ -1464,13 +1500,13 @@ time { display: block; color: var(--ink-soft); font-size: 0.82rem; }
     catch (e) { return d.toISOString().slice(0, 10); }
   }
   function tipHtml(k) {
-    var t = tipInfo(curGames, k, [nm(0), nm(1)]);
+    var t = tipInfo(leadGames, k, [nm(0), nm(1)]);
     return '<span><b>Game ' + t.num + '</b> · ' + esc(t.winner) + ' won</span>' +
       '<span class="lt' + (t.side < 0 ? '' : ' c' + t.side) + '">' + (t.side < 0 ? '' : 'Lead: ') + esc(t.leadText) + '</span>' +
-      '<span class="sc">Score ' + t.score + ' · ' + esc(fmtShort(new Date(curGames[k].at))) + '</span>';
+      '<span class="sc">Score ' + t.score + ' · ' + esc(fmtShort(new Date(leadGames[k].at))) + '</span>';
   }
   function showTip(k) {
-    var tip = $('tip'), hov = $('hov'), n = curGames.length;
+    var tip = $('tip'), hov = $('hov'), n = leadGames.length;
     if (k < 0 || k >= n) {
       curK = -1;
       tip.hidden = true;
@@ -1964,6 +2000,15 @@ time { display: block; color: var(--ink-soft); font-size: 0.82rem; }
     if (re) openReopen((re.getAttribute('data-ids') || '').split(',').filter(Boolean));
   });
 
+  $('seriesPick').addEventListener('click', function (e) {
+    var b = e.target.closest ? e.target.closest('button[data-i]') : null;
+    if (!b) return;
+    var i = parseInt(b.getAttribute('data-i'), 10);
+    leadPick = i >= sp.past.length ? null : i;
+    curK = -1; pinK = -1;
+    render();
+  });
+
   $('finish').addEventListener('click', openFinish);
   $('finCancel').addEventListener('click', closeFin);
   $('finGo').addEventListener('click', function () {
@@ -2027,7 +2072,7 @@ time { display: block; color: var(--ink-soft); font-size: 0.82rem; }
   });
   sBox.addEventListener('scroll', function () { if (curK >= 0) showTip(curK); });
   sBox.addEventListener('keydown', function (e) {
-    var n = curGames.length, k = pinK;
+    var n = leadGames.length, k = pinK;
     if (!n) return;
     if (e.key === 'ArrowLeft') k = k < 0 ? n - 1 : Math.max(0, k - 1);
     else if (e.key === 'ArrowRight') k = k < 0 ? n - 1 : Math.min(n - 1, k + 1);
