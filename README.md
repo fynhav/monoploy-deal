@@ -11,7 +11,7 @@ A two-player Monopoly Deal win tracker with levels and XP. One shared game histo
 
 ## Screens
 
-A tab bar at the bottom switches between four pages: Overview (scoreboard and series), The Lead (line graph of the lead over time), Levels (progress rings, the road to Tycoon, a level-up celebration) and Game log.
+A tab bar at the bottom switches between four pages: Overview (scoreboard and series), The Lead (line graph of the lead over time, with a series picker and a 30/14/7/3-day zoom), Levels (progress rings, the road to Tycoon, a level-up celebration) and Game log.
 
 ## Series
 

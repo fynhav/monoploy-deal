@@ -733,7 +733,7 @@ time { display: block; color: var(--ink-soft); font-size: 0.82rem; }
         <span class="a" id="s0"></span><span class="b" id="s1"></span>
       </div>
       <div>
-        <p class="label" style="margin-bottom:6px">Last 10 games, oldest to newest</p>
+        <p class="label" style="margin-bottom:6px">Last 10 games</p>
         <ol class="strip" id="strip"></ol>
       </div>
       <button class="ghost finbtn" id="finish" type="button">Finish series &amp; start again</button>
@@ -751,7 +751,6 @@ time { display: block; color: var(--ink-soft); font-size: 0.82rem; }
       <p class="label ovl">Series won</p>
       <p class="fine" id="ovAll"></p>
       <ol class="past" id="pastList" hidden></ol>
-      <p class="fine" id="ovHint">Finish a series to call a winner and start again from 0&ndash;0. XP, levels and the game log carry on.</p>
     </div>
   </section>
 
@@ -776,9 +775,8 @@ time { display: block; color: var(--ink-soft); font-size: 0.82rem; }
         <div class="street line" id="street" tabindex="0" role="region" aria-label="Lead after each game. Use the arrow keys to read each game."></div>
         <div class="tip" id="tip" role="status" hidden></div>
       </div>
-      <p class="hint" id="hint" hidden></p>
+      <div class="spick" id="zoomPick" role="group" aria-label="Zoom to a time range" hidden></div>
       <p class="fine" id="streetFacts"></p>
-      <p class="fine" id="viewNote"></p>
     </div>
   </section>
   </div>
@@ -835,7 +833,7 @@ time { display: block; color: var(--ink-soft); font-size: 0.82rem; }
       <h2>Game log</h2>
       <button class="sayno" id="undo" type="button"><b>Just Say No</b><span>Undo last game</span></button>
     </div>
-    <p class="empty-log" id="emptyLog">No games recorded yet. Each win you add shows up here with its date, newest first.</p>
+    <p class="empty-log" id="emptyLog">No games yet.</p>
     <ol class="rows" id="list" hidden></ol>
     <button class="ghost more" id="more" type="button" hidden>Show all games</button>
   </section>
@@ -920,7 +918,7 @@ time { display: block; color: var(--ink-soft); font-size: 0.82rem; }
     </form>
     <div id="gOffline" hidden>
       <p class="gate-q">Can&rsquo;t reach the server</p>
-      <p class="fine" style="margin-top:8px">Connect to the internet once to sign in. After that the app keeps working offline.</p>
+      <p class="fine" style="margin-top:8px">Connect to the internet to sign in.</p>
       <button type="button" class="ghost" id="gRetry" style="margin-top:12px">Try again</button>
     </div>
   </div>
@@ -1161,6 +1159,8 @@ time { display: block; color: var(--ink-soft); font-size: 0.82rem; }
   var curGames = [];                     // games of the series being played now
   var leadPick = null;                   // series shown on The Lead: null follows the current one, otherwise an index into sp.past
   var leadGames = [], leadIdx = 0;       // games behind the lead graph and which series they are (-1 = all games)
+  var zoomDays = 0;                      // lead graph zoom: 0 = whole period, else the last N days played
+  var viewFrom = 0;                      // first game shown on the lead graph (an index into leadGames)
   var leadBreaks = [];                   // in the all-games view: game numbers where a new series starts
   var me = null;            // 0 or 1 once signed in
   var rev = 0;              // newest server revision this phone has seen (0 = none yet)
@@ -1239,13 +1239,13 @@ time { display: block; color: var(--ink-soft); font-size: 0.82rem; }
     if (noteHold) return;
     var t = '';
     if (!storageOk) {
-      t = 'This browser is blocking storage, so changes may be lost.';
+      t = 'Storage is blocked, changes may be lost.';
     } else if (me !== null) {
       var n = outbox.length;
       var what = n === 1 ? '1 change' : n + ' changes';
       t = 'Signed in as ' + nm(me) + ' · ' + (serverOk === false
-        ? (n ? 'Offline. ' + what + ' will sync when you reconnect.' : 'Offline. Showing your last saved games.')
-        : n ? 'Syncing…' : serverOk ? 'Synced.' : 'Connecting…');
+        ? (n ? 'Offline · ' + what + ' waiting' : 'Offline')
+        : n ? 'Syncing…' : serverOk ? 'Synced' : 'Connecting…');
     }
     $('note').textContent = t;
   }
@@ -1368,9 +1368,7 @@ time { display: block; color: var(--ink-soft); font-size: 0.82rem; }
     var k = sp.past.length;
     $('ovNote').textContent = k ? k + ' series finished' : 'no series finished yet';
     var n = state.games.length;
-    $('ovAll').textContent = 'All games ever: ' + names[0] + ' ' + all[0] + ' – ' + all[1] + ' ' + names[1] + ' (' + n + (n === 1 ? ' game' : ' games') + ')' +
-      (t.ties ? '. ' + t.ties + ' series ended tied.' : '');
-    $('ovHint').hidden = k > 0;
+    $('ovAll').textContent = 'All games: ' + names[0] + ' ' + all[0] + ' – ' + all[1] + ' ' + names[1] + (t.ties ? ' · ' + t.ties + ' tied' : '');
     var html = '';
     for (var i = k - 1; i >= 0; i--) {
       var p = sp.past[i], sc = p.wins[0] + '–' + p.wins[1];
@@ -1398,17 +1396,45 @@ time { display: block; color: var(--ink-soft); font-size: 0.82rem; }
     $('aheadLead').textContent = head;
     $('streetNote').textContent = (isAll ? 'all series · ' : sp.past.length ? 'series ' + (leadIdx + 1) + ' · ' : '') + (n ? (isPast || isAll ? n : 'after ' + n) + (n === 1 ? ' game' : ' games') : 'no games yet');
     renderPick(names);
-    $('streetFacts').textContent = n ? factsText(f, names) : 'The line shows who is ahead after every game.';
-    $('viewNote').textContent = 'The line is the lead after each game, laid out by date. Each day you played gets room for its games; shaded stretches are days with no games. Above the dashed line ' + names[0] + ' is ahead; below it ' + names[1] + ' is.' +
-      (isAll ? ' This is every game ever played in one line, with a dashed mark where each new series started.' : sp.past.length ? ' Each series has its own graph, so pick one above to look at an earlier series, or all games together.' : '');
+    viewFrom = 0;
+    if (zoomDays) { var zf = zoomWindow(zoomDays); if (zf > 0 && n - zf >= 2) viewFrom = zf; }
+    var ff = viewFrom ? leadFacts(series.slice(viewFrom)) : f;
+    $('streetFacts').textContent = n ? factsText(ff, names) : '';
     var sw = function (c) {
       return '<span class="sw"><svg width="16" height="14" viewBox="0 0 16 14" aria-hidden="true"><rect class="' + c + '" x="1" y="1" width="14" height="12" rx="2"/></svg>';
     };
     $('legend').innerHTML = sw('a') + esc(names[0]) + ' ahead</span>' + sw('b') + esc(names[1]) + ' ahead</span>' +
       '<span><svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><circle class="halo" cx="9" cy="9" r="6.5"/></svg>All square</span>';
-    drawLine(names, series, f, head, box);
-    if (pinK >= n) pinK = -1;
-    showTip(curK >= 0 && curK < n ? curK : pinK);
+    drawLine(names, series, ff, head, box);
+    renderZoom();
+    if (pinK >= n || pinK < viewFrom) pinK = -1;
+    showTip(curK >= viewFrom && curK < n ? curK : pinK);
+  }
+
+  // Zoom to the last few days played. A choice only shows when it would hide something.
+  function zoomWindow(days) {
+    var n = leadGames.length;
+    if (!n) return 0;
+    var d = new Date(leadGames[n - 1].at);
+    d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - (days - 1));
+    var cut = d.getTime(), i = 0;
+    while (i < n && Date.parse(leadGames[i].at) < cut) i++;
+    return i;
+  }
+  function zoomChoices() {
+    var out = [], seen = {}, n = leadGames.length;
+    [30, 14, 7, 3].forEach(function (z) {
+      var from = zoomWindow(z);
+      if (from > 0 && n - from >= 2 && !seen[from]) { seen[from] = 1; out.push({ days: z, from: from }); }
+    });
+    return out;
+  }
+  function renderZoom() {
+    var box = $('zoomPick'), ch = zoomChoices();
+    box.hidden = ch.length === 0;
+    if (!ch.length) { box.innerHTML = ''; return; }
+    box.innerHTML = '<button type="button" data-z="0" aria-pressed="' + (viewFrom === 0) + '">All time</button>' +
+      ch.map(function (c) { return '<button type="button" data-z="' + c.days + '" aria-pressed="' + (viewFrom === c.from) + '">' + c.days + ' days</button>'; }).join('');
   }
 
   function renderPick(names) {
@@ -1427,14 +1453,17 @@ time { display: block; color: var(--ink-soft); font-size: 0.82rem; }
   }
 
   function drawLine(names, series, f, head, box) {
+    var from = viewFrom, startV = from ? series[from - 1] : 0;
+    series = series.slice(from);
     var n = series.length;
+    if (from) f = leadFacts(series.concat([startV]));
     var W = Math.max(240, box.clientWidth || 340), H = 210;
     var PADL = 40, PADR = 14, PADT = 14, PADB = 26;
     var lo = -Math.max(2, f.maxB), hi = Math.max(2, f.maxA);
     var plotW = W - PADL - PADR, plotH = H - PADT - PADB;
     function Y(v) { return PADT + (hi - v) / (hi - lo) * plotH; }
     var yz = Y(0), s = '';
-    var lay = dayLayout(leadGames, 8, 30, 8, 56);
+    var lay = dayLayout(leadGames.slice(from), 8, 30, 8, 56);
     var S = lay.width ? plotW / lay.width : 1;
     function X(u) { return PADL + u * S; }
     var xs = lay.off.map(X), ys = series.map(Y);
@@ -1453,21 +1482,24 @@ time { display: block; color: var(--ink-soft); font-size: 0.82rem; }
 
     // all-games view: a dashed line where each new series started
     leadBreaks.forEach(function (k, i) {
-      if (k <= 0 || k >= n) return;
-      var bx = ((xs[k - 1] + xs[k]) / 2).toFixed(1);
+      if (k <= from || k >= from + n) return;
+      var bx = ((xs[k - from - 1] + xs[k - from]) / 2).toFixed(1);
       s += '<line class="brk" x1="' + bx + '" x2="' + bx + '" y1="' + PADT + '" y2="' + (H - PADB) + '"/>' +
            '<text class="brkt" x="' + (+bx + 3) + '" y="' + (PADT + 22) + '">S' + (i + 2) + '</text>';
     });
 
     // the lead holds steady through quiet days, then moves with the next game
-    var d = 'M' + PADL + ' ' + yz.toFixed(1), prevSeg = -1, segOf = [];
+    var pts = '', segOf = [];
     lay.segs.forEach(function (sg, i) { for (var j = 0; j < sg.count; j++) segOf.push(i); });
     series.forEach(function (v, k) {
-      if (k > 0 && segOf[k] !== segOf[k - 1]) d += 'L' + X(lay.segs[segOf[k]].x0).toFixed(1) + ' ' + ys[k - 1].toFixed(1);
-      d += 'L' + xs[k].toFixed(1) + ' ' + ys[k].toFixed(1);
+      if (k > 0 && segOf[k] !== segOf[k - 1]) pts += 'L' + X(lay.segs[segOf[k]].x0).toFixed(1) + ' ' + ys[k - 1].toFixed(1);
+      pts += 'L' + xs[k].toFixed(1) + ' ' + ys[k].toFixed(1);
     });
     var lastX = n ? xs[n - 1] : PADL;
-    var area = d + 'L' + lastX.toFixed(1) + ' ' + yz.toFixed(1) + 'Z';
+    // zoomed in, the line starts from where the lead stood before the first visible game
+    var y0 = Y(startV).toFixed(1);
+    var d = 'M' + PADL + ' ' + y0 + pts;
+    var area = 'M' + PADL + ' ' + yz.toFixed(1) + 'L' + PADL + ' ' + y0 + pts + 'L' + lastX.toFixed(1) + ' ' + yz.toFixed(1) + 'Z';
     s += '<clipPath id="clipA"><rect x="0" y="0" width="' + W + '" height="' + yz + '"/></clipPath>' +
          '<clipPath id="clipB"><rect x="0" y="' + yz + '" width="' + W + '" height="' + (H - yz) + '"/></clipPath>';
     if (n) {
@@ -1500,13 +1532,12 @@ time { display: block; color: var(--ink-soft); font-size: 0.82rem; }
 
     box.innerHTML = '<svg width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H +
       '" role="img" aria-label="' + esc(head) + '. Line graph of the lead after every game, by date.">' + s + ticks + '</svg>';
-    $('hint').hidden = !n;
-    $('hint').textContent = 'Tap, drag or hover the graph to see the lead at each game.';
     box.scrollLeft = 0;
+    var ysAbs = new Array(from).concat(ys);
     geo = {
-      x: function (k) { return xs[k]; },
-      idx: function (px) { return nearestX(xs, px, 6); },
-      hw: 4, ys: ys, mid: yz
+      x: function (k) { return xs[k - from]; },
+      idx: function (px) { var j = nearestX(xs, px, 6); return j < 0 ? -1 : j + from; },
+      hw: 4, ys: ysAbs, mid: yz
     };
   }
 
@@ -1526,7 +1557,7 @@ time { display: block; color: var(--ink-soft); font-size: 0.82rem; }
   }
   function showTip(k) {
     var tip = $('tip'), hov = $('hov'), n = leadGames.length;
-    if (k < 0 || k >= n) {
+    if (k < viewFrom || k >= n) {
       curK = -1;
       tip.hidden = true;
       if (hov) hov.setAttribute('display', 'none');
@@ -1657,11 +1688,9 @@ time { display: block; color: var(--ink-soft); font-size: 0.82rem; }
   }
   function renderHow() {
     $('howRules').innerHTML =
-      '<li>' + XP_PLAY + ' XP each for playing a game, win or lose.</li>' +
-      '<li>' + XP_WIN + ' XP extra for winning it.</li>' +
-      '<li>Win streak bonus on each win: 2 in a row +' + streakBonus(2) + ', 3 in a row +' + streakBonus(3) + ', 4 or more +' + streakBonus(4) + '.</li>' +
-      '<li>XP is worked out from the shared game list, so removing a game takes its XP back.</li>' +
-      '<li>Finishing a series restarts the score at 0&ndash;0 but keeps all XP, levels and win streaks.</li>';
+      '<li>Play a game: +' + XP_PLAY + ' XP</li>' +
+      '<li>Win it: +' + XP_WIN + ' XP more</li>' +
+      '<li>Win streak: 2 in a row +' + streakBonus(2) + ', 3 +' + streakBonus(3) + ', 4 or more +' + streakBonus(4) + '</li>';
     $('howLevels').innerHTML = LEVELS.map(function (l, i) {
       return '<li><b>' + (i + 1) + '</b> ' + l.name + '<span>' + fmtXp(l.at) + '</span></li>';
     }).join('');
@@ -1855,7 +1884,7 @@ time { display: block; color: var(--ink-soft); font-size: 0.82rem; }
       : esc(nm(win)) + ' wins this series ' + w[win] + '–' + w[1 - win] + ' after ' + n + (n === 1 ? ' game.' : ' games.');
     finMode = 'finish';
     showFin('Finish series ' + (sp.past.length + 1) + '?', scoreBadge(0, 'WINS', w[0]) + scoreBadge(1, 'WINS', w[1]),
-      line + '<small>The score goes back to 0–0. XP, levels and the game log stay as they are.</small>', 'Finish series', 'Cancel');
+      line + '<small>The score restarts at 0–0. XP stays.</small>', 'Finish series', 'Cancel');
   }
   function doFinish() {
     var n = curGames.length;
@@ -1869,7 +1898,7 @@ time { display: block; color: var(--ink-soft); font-size: 0.82rem; }
     flush().then(renderNote);
     // show who won
     var t = overallTally(sp.past);
-    var overall = 'Overall: ' + esc(nm(0)) + ' ' + t.won[0] + ' – ' + t.won[1] + ' ' + esc(nm(1)) + '.<small>Series ' + (no + 1) + ' starts at 0–0. XP and levels carry on.</small>';
+    var overall = 'Overall: ' + esc(nm(0)) + ' ' + t.won[0] + ' – ' + t.won[1] + ' ' + esc(nm(1)) + '.';
     finMode = 'done';
     if (win < 0) {
       showFin('Series ' + no + ' tied', scoreBadge(0, 'WINS', w[0]) + scoreBadge(1, 'WINS', w[1]), 'Dead level at ' + w[0] + '–' + w[1] + ' after ' + n + (n === 1 ? ' game. ' : ' games. ') + overall, 'Start series ' + (no + 1), '');
@@ -1885,7 +1914,7 @@ time { display: block; color: var(--ink-soft); font-size: 0.82rem; }
     finMode = 'reopen'; finIds = ids;
     var names = [nm(0), nm(1)];
     showFin('Reopen series ' + p.no + '?', '',
-      esc(seriesLine(p, names).replace('Series ' + p.no + ' finished · ', 'Series ' + p.no + ': ')) + '.<small>Its games go back into the current series, together with anything played since, and the overall tally drops by one.</small>', 'Reopen series', 'Cancel');
+      esc(seriesLine(p, names).replace('Series ' + p.no + ' finished · ', 'Series ' + p.no + ': ')) + '.<small>Its games rejoin the current series.</small>', 'Reopen series', 'Cancel');
   }
   function doReopen() {
     var ids = finIds || [];
@@ -1943,12 +1972,12 @@ time { display: block; color: var(--ink-soft); font-size: 0.82rem; }
   function showForm() {
     $('gPick').hidden = true; $('gOffline').hidden = true; $('gForm').hidden = false;
     var title, help, l1, l2 = null;
-    if (gMode === 'login') { title = 'Hi ' + (users[gSlot] ? users[gSlot].name : ''); help = 'Enter your PIN.'; l1 = 'PIN'; }
+    if (gMode === 'login') { title = 'Hi ' + (users[gSlot] ? users[gSlot].name : ''); help = ''; l1 = 'PIN'; }
     else if (gMode === 'setup') {
       title = 'Welcome ' + (users[gSlot] ? users[gSlot].name : '');
-      help = 'Choose a PIN of 4 to 6 digits. You only enter it once on each phone; after that you stay signed in.';
+      help = '4 to 6 digits.';
       l1 = 'Choose a PIN'; l2 = 'Repeat the PIN';
-    } else { title = 'Change your PIN'; help = 'Your other signed-in phones stay signed in.'; l1 = 'Current PIN'; l2 = 'New PIN'; }
+    } else { title = 'Change your PIN'; help = ''; l1 = 'Current PIN'; l2 = 'New PIN'; }
     $('gTitle').textContent = title; $('gHelp').textContent = help;
     $('gL1').textContent = l1; $('gL2').textContent = l2 || '';
     $('gL2').hidden = !l2; $('gPin2').hidden = !l2;
@@ -2028,6 +2057,14 @@ time { display: block; color: var(--ink-soft); font-size: 0.82rem; }
     render();
   });
 
+  $('zoomPick').addEventListener('click', function (e) {
+    var b = e.target.closest ? e.target.closest('button[data-z]') : null;
+    if (!b) return;
+    zoomDays = parseInt(b.getAttribute('data-z'), 10) || 0;
+    curK = -1; pinK = -1;
+    render();
+  });
+
   $('finish').addEventListener('click', openFinish);
   $('finCancel').addEventListener('click', closeFin);
   $('finGo').addEventListener('click', function () {
@@ -2092,10 +2129,10 @@ time { display: block; color: var(--ink-soft); font-size: 0.82rem; }
   sBox.addEventListener('scroll', function () { if (curK >= 0) showTip(curK); });
   sBox.addEventListener('keydown', function (e) {
     var n = leadGames.length, k = pinK;
-    if (!n) return;
-    if (e.key === 'ArrowLeft') k = k < 0 ? n - 1 : Math.max(0, k - 1);
-    else if (e.key === 'ArrowRight') k = k < 0 ? n - 1 : Math.min(n - 1, k + 1);
-    else if (e.key === 'Home') k = 0;
+    if (n <= viewFrom) return;
+    if (e.key === 'ArrowLeft') k = k < viewFrom ? n - 1 : Math.max(viewFrom, k - 1);
+    else if (e.key === 'ArrowRight') k = k < viewFrom ? n - 1 : Math.min(n - 1, k + 1);
+    else if (e.key === 'Home') k = viewFrom;
     else if (e.key === 'End') k = n - 1;
     else if (e.key === 'Escape') { pinK = -1; showTip(-1); return; }
     else return;
