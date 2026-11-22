@@ -335,6 +335,8 @@ button:focus-visible, input:focus-visible { outline: 3px solid var(--ink); outli
 .street .road { fill: var(--road); }
 .street .edge { fill: none; stroke: var(--ink); stroke-width: 1.5; }
 .street .centre { stroke: var(--ink); stroke-width: 2; stroke-dasharray: 9 7; }
+.street .brk { stroke: var(--ink-soft); stroke-width: 1.5; stroke-dasharray: 3 4; }
+.street .brkt { fill: var(--ink-soft); font: 700 10px var(--font-body); }
 .street .go { font-weight: 800; font-size: 15px; letter-spacing: 0.02em; }
 .street .tick { font-weight: 700; font-size: 10px; fill: var(--ink-soft); }
 .street .now { fill: var(--gold); fill-opacity: 0.3; }
@@ -1158,7 +1160,8 @@ time { display: block; color: var(--ink-soft); font-size: 0.82rem; }
   var sp = { past: [], current: [] };   // the games split into finished series and the current one
   var curGames = [];                     // games of the series being played now
   var leadPick = null;                   // series shown on The Lead: null follows the current one, otherwise an index into sp.past
-  var leadGames = [], leadIdx = 0;       // games behind the lead graph and which series they are
+  var leadGames = [], leadIdx = 0;       // games behind the lead graph and which series they are (-1 = all games)
+  var leadBreaks = [];                   // in the all-games view: game numbers where a new series starts
   var me = null;            // 0 or 1 once signed in
   var rev = 0;              // newest server revision this phone has seen (0 = none yet)
   var outbox = [];          // changes made here that the server has not confirmed yet
@@ -1258,9 +1261,17 @@ time { display: block; color: var(--ink-soft); font-size: 0.82rem; }
     curGames = sp.current;
     // which series the lead graph shows
     var curNo = sp.past.length;
-    if (leadPick !== null && (leadPick < 0 || leadPick >= curNo)) leadPick = null;
-    leadIdx = leadPick !== null ? leadPick : (curGames.length || !curNo ? curNo : curNo - 1);
-    leadGames = leadIdx === curNo ? curGames : sp.past[leadIdx].games;
+    if (leadPick === 'all') { if (!curNo) leadPick = null; }
+    else if (leadPick !== null && (leadPick < 0 || leadPick >= curNo)) leadPick = null;
+    leadBreaks = [];
+    if (leadPick === 'all') {
+      leadIdx = -1; leadGames = state.games;
+      var acc = 0;
+      sp.past.forEach(function (p) { acc += p.games.length; leadBreaks.push(acc); });
+    } else {
+      leadIdx = leadPick !== null ? leadPick : (curGames.length || !curNo ? curNo : curNo - 1);
+      leadGames = leadIdx === curNo ? curGames : sp.past[leadIdx].games;
+    }
     var st = computeStats(curGames);
     var names = [nm(0), nm(1)];
     var mk = marks(names);
@@ -1381,15 +1392,15 @@ time { display: block; color: var(--ink-soft); font-size: 0.82rem; }
     var series = leadSeries(leadGames);
     var f = leadFacts(series);
     var box = $('street');
-    var isPast = leadIdx < sp.past.length, P = isPast ? sp.past[leadIdx] : null;
+    var isAll = leadIdx < 0, isPast = !isAll && leadIdx < sp.past.length, P = isPast ? sp.past[leadIdx] : null;
     var head = isPast ? (P.winner < 0 ? 'Series ' + P.no + ' ended tied ' + P.wins[0] + '–' + P.wins[1]
       : names[P.winner] + ' won series ' + P.no + ', ' + P.wins[P.winner] + '–' + P.wins[1 - P.winner]) : aheadText(f.current, names, n);
     $('aheadLead').textContent = head;
-    $('streetNote').textContent = (sp.past.length ? 'series ' + (leadIdx + 1) + ' · ' : '') + (n ? (isPast ? n : 'after ' + n) + (n === 1 ? ' game' : ' games') : 'no games yet');
+    $('streetNote').textContent = (isAll ? 'all series · ' : sp.past.length ? 'series ' + (leadIdx + 1) + ' · ' : '') + (n ? (isPast || isAll ? n : 'after ' + n) + (n === 1 ? ' game' : ' games') : 'no games yet');
     renderPick(names);
     $('streetFacts').textContent = n ? factsText(f, names) : 'The line shows who is ahead after every game.';
     $('viewNote').textContent = 'The line is the lead after each game, laid out by date. Each day you played gets room for its games; shaded stretches are days with no games. Above the dashed line ' + names[0] + ' is ahead; below it ' + names[1] + ' is.' +
-      (sp.past.length ? ' Each series has its own graph, so pick one above to look at an earlier series.' : '');
+      (isAll ? ' This is every game ever played in one line, with a dashed mark where each new series started.' : sp.past.length ? ' Each series has its own graph, so pick one above to look at an earlier series, or all games together.' : '');
     var sw = function (c) {
       return '<span class="sw"><svg width="16" height="14" viewBox="0 0 16 14" aria-hidden="true"><rect class="' + c + '" x="1" y="1" width="14" height="12" rx="2"/></svg>';
     };
@@ -1404,7 +1415,7 @@ time { display: block; color: var(--ink-soft); font-size: 0.82rem; }
     var box = $('seriesPick'), k = sp.past.length;
     box.hidden = k === 0;
     if (!k) { box.innerHTML = ''; return; }
-    var html = '';
+    var html = '<button type="button" data-i="all" aria-pressed="' + (leadIdx < 0) + '">All games</button>';
     for (var i = 0; i <= k; i++) {
       var isCur = i === k, win = isCur ? -1 : sp.past[i].winner;
       html += '<button type="button" data-i="' + i + '" aria-pressed="' + (i === leadIdx) + '"' +
@@ -1439,6 +1450,14 @@ time { display: block; color: var(--ink-soft); font-size: 0.82rem; }
     });
     s += '<line class="centre" x1="' + PADL + '" y1="' + yz + '" x2="' + (W - PADR) + '" y2="' + yz + '"/>';
     s += '<rect id="hov" class="hov" x="0" y="' + PADT + '" width="4" height="' + plotH + '" display="none"/>';
+
+    // all-games view: a dashed line where each new series started
+    leadBreaks.forEach(function (k, i) {
+      if (k <= 0 || k >= n) return;
+      var bx = ((xs[k - 1] + xs[k]) / 2).toFixed(1);
+      s += '<line class="brk" x1="' + bx + '" x2="' + bx + '" y1="' + PADT + '" y2="' + (H - PADB) + '"/>' +
+           '<text class="brkt" x="' + (+bx + 3) + '" y="' + (PADT + 22) + '">S' + (i + 2) + '</text>';
+    });
 
     // the lead holds steady through quiet days, then moves with the next game
     var d = 'M' + PADL + ' ' + yz.toFixed(1), prevSeg = -1, segOf = [];
@@ -2003,8 +2022,8 @@ time { display: block; color: var(--ink-soft); font-size: 0.82rem; }
   $('seriesPick').addEventListener('click', function (e) {
     var b = e.target.closest ? e.target.closest('button[data-i]') : null;
     if (!b) return;
-    var i = parseInt(b.getAttribute('data-i'), 10);
-    leadPick = i >= sp.past.length ? null : i;
+    var raw = b.getAttribute('data-i'), i = parseInt(raw, 10);
+    leadPick = raw === 'all' ? 'all' : i >= sp.past.length ? null : i;
     curK = -1; pinK = -1;
     render();
   });
